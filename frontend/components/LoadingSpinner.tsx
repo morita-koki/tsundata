@@ -2,6 +2,7 @@ interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   color?: 'indigo' | 'gray' | 'white';
   text?: string;
+  variant?: 'spinner' | 'pulse' | 'skeleton';
   className?: string;
 }
 
@@ -9,6 +10,7 @@ export default function LoadingSpinner({
   size = 'md', 
   color = 'indigo', 
   text,
+  variant = 'spinner',
   className = '' 
 }: LoadingSpinnerProps) {
   const sizeClasses = {
@@ -30,6 +32,53 @@ export default function LoadingSpinner({
     white: 'text-white'
   };
 
+  if (variant === 'pulse') {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <div className="flex flex-col items-center space-y-2">
+          <div 
+            className={`
+              ${sizeClasses[size]} 
+              ${colorClasses[color]} 
+              rounded-full 
+              animate-pulse
+              bg-opacity-50
+            `}
+            role="status"
+            aria-label="読み込み中"
+          />
+          {text && (
+            <div className={`text-sm font-medium ${textColorClasses[color]} animate-pulse`}>
+              {text}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'skeleton') {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <div className="flex flex-col items-center space-y-2">
+          <div 
+            className={`
+              ${sizeClasses[size]} 
+              rounded 
+              animate-skeleton
+            `}
+            role="status"
+            aria-label="読み込み中"
+          />
+          {text && (
+            <div className="h-4 w-20 rounded animate-skeleton mt-2" />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Default spinner variant
   return (
     <div className={`flex items-center justify-center ${className}`}>
       <div className="flex flex-col items-center space-y-2">

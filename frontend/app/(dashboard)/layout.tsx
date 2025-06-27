@@ -9,36 +9,38 @@ import Sidebar from '@/components/Sidebar';
 import LoadingPage from '@/components/LoadingPage';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageContext';
+import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { isSidebarOpen, setSidebarOpen, toggleSidebar } = useSidebar();
   const { pageTitle } = usePageTitle();
+  const { isLoading, executeWithLoading } = useMinimumLoading();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        try {
-          // Get fresh token and store it
-          const token = await firebaseUser.getIdToken();
-          localStorage.setItem('token', token);
-          setIsLoading(false);
-        } catch (error) {
-          console.error('Auth state change error:', error);
-          router.push('/login');
-        }
+        await executeWithLoading(async () => {
+          try {
+            // Get fresh token and store it
+            const token = await firebaseUser.getIdToken();
+            localStorage.setItem('token', token);
+          } catch (error) {
+            console.error('Auth state change error:', error);
+            router.push('/login');
+          }
+        });
       } else {
         router.push('/login');
       }
     });
 
     return () => unsubscribe();
-  }, [router]);
+  }, [router, executeWithLoading]);
 
   if (isLoading) {
     return <LoadingPage text="認証状態を確認中..." />;

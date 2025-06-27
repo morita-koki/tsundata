@@ -10,6 +10,7 @@ import BookList from '@/components/BookList';
 import LoadingPage from '@/components/LoadingPage';
 import { useToast } from '@/hooks/useToast';
 import { usePageTitle } from '@/contexts/PageContext';
+import { useInitialMinimumLoading } from '@/hooks/useMinimumLoading';
 
 export default function HomePage() {
   const [user, setUser] = useState<any>(null);
@@ -17,42 +18,36 @@ export default function HomePage() {
   const [bookshelves, setBookshelves] = useState<Bookshelf[]>([]);
   const [allBooks, setAllBooks] = useState<UserBook[]>([]);
   const [showScanner, setShowScanner] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const { setPageTitle } = usePageTitle();
+
+  const loadData = async () => {
+    console.log('📊 Loading dashboard data...');
+    const [statsData, bookshelvesData, libraryData] = await Promise.all([
+      userApi.getStats(),
+      bookshelfApi.getAll(),
+      bookApi.getLibrary()
+    ]);
+    
+    console.log('📈 Stats data:', statsData);
+    console.log('📚 Bookshelves data:', bookshelvesData);
+    console.log('📖 Library data:', libraryData);
+    
+    setStats(statsData);
+    setBookshelves(bookshelvesData);
+    setAllBooks(libraryData);
+  };
+
+  const isLoading = useInitialMinimumLoading(loadData, []);
 
   useEffect(() => {
     setPageTitle('つんでーた');
     const userData = localStorage.getItem('user');
     if (userData) {
       setUser(JSON.parse(userData));
-      loadData();
     }
   }, [setPageTitle]);
-
-  const loadData = async () => {
-    try {
-      console.log('📊 Loading dashboard data...');
-      const [statsData, bookshelvesData, libraryData] = await Promise.all([
-        userApi.getStats(),
-        bookshelfApi.getAll(),
-        bookApi.getLibrary()
-      ]);
-      
-      console.log('📈 Stats data:', statsData);
-      console.log('📚 Bookshelves data:', bookshelvesData);
-      console.log('📖 Library data:', libraryData);
-      
-      setStats(statsData);
-      setBookshelves(bookshelvesData);
-      setAllBooks(libraryData);
-    } catch (error) {
-      console.error('❌ Failed to load data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleScan = useCallback(async (isbn: string) => {
     console.log(`📱 ISBN scanned: ${isbn}`);

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { bookshelfApi, Bookshelf } from '@/lib/api';
 import LoadingSpinner from './LoadingSpinner';
+import { useInitialMinimumLoading } from '@/hooks/useMinimumLoading';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,16 +13,24 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [bookshelves, setBookshelves] = useState<Bookshelf[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newBookshelfName, setNewBookshelfName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    loadBookshelves();
+  const loadBookshelves = useCallback(async () => {
+    try {
+      const data = await bookshelfApi.getAll();
+      setBookshelves(data);
+    } catch (error) {
+      console.error('Failed to load bookshelves:', error);
+    }
+  }, []);
 
+  const isLoading = useInitialMinimumLoading(loadBookshelves, []);
+
+  useEffect(() => {
     // Listen for bookshelf updates
     const handleBookshelfUpdate = () => {
       loadBookshelves();
@@ -32,18 +41,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     return () => {
       window.removeEventListener('bookshelfUpdated', handleBookshelfUpdate);
     };
-  }, []);
-
-  const loadBookshelves = async () => {
-    try {
-      const data = await bookshelfApi.getAll();
-      setBookshelves(data);
-    } catch (error) {
-      console.error('Failed to load bookshelves:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [loadBookshelves]);
 
   const handleBookshelfClick = (bookshelfId: number) => {
     router.push(`/bookshelves/${bookshelfId}`);
@@ -179,8 +177,17 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
               {/* Bookshelves List */}
               {isLoading ? (
-                <div className="px-3 py-2">
-                  <LoadingSpinner size="sm" color="gray" text="本棚を読み込み中..." />
+                <div className="px-3 py-2 space-y-2">
+                  {/* Skeleton placeholders for bookshelf items */}
+                  {[...Array(3)].map((_, index) => (
+                    <div key={index} className="flex items-center justify-between px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="h-4 rounded animate-skeleton mb-1"></div>
+                        <div className="h-3 rounded animate-skeleton w-12"></div>
+                      </div>
+                      <div className="w-2 h-2 rounded-full animate-skeleton"></div>
+                    </div>
+                  ))}
                 </div>
               ) : bookshelves.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-gray-500">本棚がありません</div>

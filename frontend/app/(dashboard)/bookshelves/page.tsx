@@ -11,6 +11,7 @@ import Navigation from "@/components/Navigation";
 import Toast from "@/components/Toast";
 import LoadingPage from "@/components/LoadingPage";
 import { useToast } from "@/hooks/useToast";
+import { useInitialMinimumLoading } from "@/hooks/useMinimumLoading";
 
 export default function BookshelvesPage() {
   const [bookshelves, setBookshelves] = useState<Bookshelf[]>([]);
@@ -18,7 +19,6 @@ export default function BookshelvesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newBookshelfName, setNewBookshelfName] = useState("");
   const [newBookshelfDescription, setNewBookshelfDescription] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const [editingBookshelf, setEditingBookshelf] = useState<Bookshelf | null>(
     null
   );
@@ -28,6 +28,18 @@ export default function BookshelvesPage() {
   const router = useRouter();
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
+  const loadBookshelves = async () => {
+    const [myBookshelves, publicData] = await Promise.all([
+      bookshelfApi.getAll(),
+      bookshelfApi.getPublic(),
+    ]);
+
+    setBookshelves(myBookshelves);
+    setPublicBookshelves(publicData);
+  };
+
+  const isLoading = useInitialMinimumLoading(loadBookshelves, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -35,7 +47,6 @@ export default function BookshelvesPage() {
           // Get fresh token and store it
           const token = await firebaseUser.getIdToken();
           localStorage.setItem("token", token);
-          loadBookshelves();
         } catch (error) {
           console.error("Auth state change error:", error);
           router.push("/login");
@@ -47,22 +58,6 @@ export default function BookshelvesPage() {
 
     return () => unsubscribe();
   }, [router]);
-
-  const loadBookshelves = async () => {
-    try {
-      const [myBookshelves, publicData] = await Promise.all([
-        bookshelfApi.getAll(),
-        bookshelfApi.getPublic(),
-      ]);
-
-      setBookshelves(myBookshelves);
-      setPublicBookshelves(publicData);
-    } catch (error) {
-      console.error("Failed to load bookshelves:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const createBookshelf = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +136,7 @@ export default function BookshelvesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Navigation title="本棚一覧" />
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">

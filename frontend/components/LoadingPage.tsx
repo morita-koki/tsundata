@@ -10,8 +10,8 @@ export default function LoadingPage({
   className = '' 
 }: LoadingPageProps) {
   return (
-    <div className={`min-h-screen flex items-center justify-center bg-gray-50 ${className}`}>
-      <div className="text-center">
+    <div className={`min-h-screen flex items-center justify-center bg-white ${className}`}>
+      <div className="text-center bg-white p-8 rounded-lg shadow-sm">
         <LoadingSpinner 
           size="xl" 
           color="indigo" 
