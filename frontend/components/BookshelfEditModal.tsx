@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Bookshelf } from "@/lib/api";
+import LoadingSpinner from "./LoadingSpinner";
 
 interface BookshelfEditModalProps {
   bookshelf: Bookshelf | null;
@@ -117,10 +118,17 @@ export default function BookshelfEditModal({
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
               disabled={loading || !name.trim()}
             >
-              {loading ? "保存中..." : "保存"}
+              {loading ? (
+                <div className="flex items-center space-x-2">
+                  <LoadingSpinner size="sm" color="white" />
+                  <span>保存中...</span>
+                </div>
+              ) : (
+                "保存"
+              )}
             </button>
           </div>
         </form>

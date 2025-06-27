@@ -39,14 +39,25 @@
 cd bookshelf-app
 ```
 
-### 2. バックエンドのセットアップ
+### 2. 環境変数の設定
+```bash
+# プロジェクトルートで環境変数ファイルを作成
+cp .env.example .env
+# .envファイルを編集して必要な値を設定
+```
+
+### 3. Dockerを使用した起動（推奨）
+```bash
+# プロジェクトルートで実行
+docker-compose up -d
+```
+
+### 4. 個別セットアップ（開発用）
+
+#### バックエンド
 ```bash
 cd backend
 npm install
-
-# 環境変数の設定
-cp .env.example .env
-# .envファイルを編集して必要な値を設定
 
 # データベースのマイグレーション
 npm run db:generate
@@ -56,7 +67,7 @@ npm run db:migrate
 npm run dev
 ```
 
-### 3. フロントエンドのセットアップ
+#### フロントエンド
 ```bash
 cd frontend
 npm install
@@ -67,15 +78,46 @@ npm run dev
 
 ## 環境変数
 
-### バックエンド (.env)
-```
-PORT=3001
-JWT_SECRET=your-jwt-secret-key
-DATABASE_URL=./db/bookshelf.db
+プロジェクトルートの`.env`ファイルで一括管理されています。
+
+### 必要な環境変数
+
+`.env.example`をコピーして設定してください：
+
+```bash
+# JWT Secret Key for backend authentication
+JWT_SECRET=your-jwt-secret-key-change-this-in-production
+
+# Google Books API Key
 GOOGLE_BOOKS_API_KEY=your-google-books-api-key
+
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=your-firebase-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789012
+NEXT_PUBLIC_FIREBASE_APP_ID=1:123456789012:web:abcdef123456789012345
+
+# API URL for frontend
+NEXT_PUBLIC_API_URL=https://localhost/api
 ```
 
-### フロントエンド (.env.local)
+### 設定手順
+
+1. **JWT_SECRET**: 強力なランダム文字列を生成して設定
+2. **GOOGLE_BOOKS_API_KEY**: [Google Cloud Console](https://console.cloud.google.com/)でBooks APIを有効にして取得
+3. **Firebase設定**: [Firebase Console](https://console.firebase.google.com/)のプロジェクト設定から取得
+
+### 注意事項
+
+- `.env`ファイルは`.gitignore`に含まれており、Gitにコミットされません
+- 本番環境では必ず強力なシークレットキーを使用してください
+- Firebase設定の`NEXT_PUBLIC_`プレフィックスがついた変数はクライアントサイドで公開されます
+
+### 従来の個別環境変数ファイル（非推奨）
+
+**バックエンド** (`backend/.env`):
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ```

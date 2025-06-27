@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { bookApi, UserBook } from '@/lib/api';
 import Toast from '@/components/Toast';
 import BookList from '@/components/BookList';
+import LoadingPage from '@/components/LoadingPage';
 import { useToast } from '@/hooks/useToast';
 import { usePageTitle } from '@/contexts/PageContext';
 
@@ -60,11 +61,7 @@ export default function AllBooksPage() {
   const unreadBooks = allBooks.filter(book => !book.isRead);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">読み込み中...</div>
-      </div>
-    );
+    return <LoadingPage text="書籍一覧を読み込み中..." />;
   }
 
   return (

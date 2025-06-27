@@ -9,6 +9,7 @@ import BookshelfEditModal from "@/components/BookshelfEditModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Navigation from "@/components/Navigation";
 import Toast from "@/components/Toast";
+import LoadingPage from "@/components/LoadingPage";
 import { useToast } from "@/hooks/useToast";
 
 export default function BookshelvesPage() {
@@ -136,11 +137,7 @@ export default function BookshelvesPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">読み込み中...</div>
-      </div>
-    );
+    return <LoadingPage text="本棚を読み込み中..." />;
   }
 
   return (

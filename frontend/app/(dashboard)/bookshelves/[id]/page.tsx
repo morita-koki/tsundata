@@ -6,6 +6,7 @@ import { bookshelfApi, bookApi, Bookshelf, UserBook } from '@/lib/api';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import BookList from '@/components/BookList';
 import Toast from '@/components/Toast';
+import LoadingPage from '@/components/LoadingPage';
 import { useToast } from '@/hooks/useToast';
 import { usePageTitle } from '@/contexts/PageContext';
 
@@ -115,11 +116,7 @@ export default function BookshelfDetailPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">読み込み中...</div>
-      </div>
-    );
+    return <LoadingPage text="本棚の詳細を読み込み中..." />;
   }
 
   if (!bookshelf) {

@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import Navigation from '@/components/Navigation';
 import Sidebar from '@/components/Sidebar';
+import LoadingPage from '@/components/LoadingPage';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageContext';
 
@@ -40,11 +41,7 @@ export default function DashboardLayout({
   }, [router]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">読み込み中...</div>
-      </div>
-    );
+    return <LoadingPage text="認証状態を確認中..." />;
   }
 
   return (

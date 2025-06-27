@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { bookshelfApi, Bookshelf } from '@/lib/api';
+import LoadingSpinner from './LoadingSpinner';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -178,7 +179,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
               {/* Bookshelves List */}
               {isLoading ? (
-                <div className="px-3 py-2 text-sm text-gray-500">読み込み中...</div>
+                <div className="px-3 py-2">
+                  <LoadingSpinner size="sm" color="gray" text="本棚を読み込み中..." />
+                </div>
               ) : bookshelves.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-gray-500">本棚がありません</div>
               ) : (
@@ -211,17 +214,24 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   {/* Create New Bookshelf Input - Only show when showCreateForm is true */}
                   {showCreateForm && (
                     <div className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={newBookshelfName}
-                        onChange={(e) => setNewBookshelfName(e.target.value)}
-                        onBlur={handleInputBlur}
-                        onKeyDown={handleKeyDown}
-                        placeholder={isCreating ? '作成中...' : '新しい本棚名を入力'}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-400"
-                        disabled={isCreating}
-                        autoFocus
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={newBookshelfName}
+                          onChange={(e) => setNewBookshelfName(e.target.value)}
+                          onBlur={handleInputBlur}
+                          onKeyDown={handleKeyDown}
+                          placeholder="新しい本棚名を入力"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-400"
+                          disabled={isCreating}
+                          autoFocus
+                        />
+                        {isCreating && (
+                          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded">
+                            <LoadingSpinner size="sm" color="indigo" />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

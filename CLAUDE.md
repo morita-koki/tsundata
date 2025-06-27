@@ -56,14 +56,20 @@ Uses Firebase Authentication with custom backend user sync. Frontend gets Fireba
 
 ## Environment Variables
 
-**Backend (.env)**:
-- `PORT` - Server port (default 3001)
-- `JWT_SECRET` - JWT signing secret
-- `DATABASE_URL` - SQLite database path
-- `GOOGLE_BOOKS_API_KEY` - Google Books API key
+Environment variables are managed in a single `.env` file at the project root:
 
-**Frontend (.env.local)**:
-- `NEXT_PUBLIC_API_URL` - Backend API URL (default http://localhost:3001/api)
+**Required Variables** (copy from `.env.example`):
+- `JWT_SECRET` - JWT signing secret for backend authentication
+- `GOOGLE_BOOKS_API_KEY` - Google Books API key
+- `NEXT_PUBLIC_API_URL` - Backend API URL (default https://localhost/api)
+- `NEXT_PUBLIC_FIREBASE_API_KEY` - Firebase API key
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` - Firebase auth domain
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID` - Firebase project ID
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` - Firebase storage bucket
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` - Firebase messaging sender ID
+- `NEXT_PUBLIC_FIREBASE_APP_ID` - Firebase app ID
+
+**Setup**: `cp .env.example .env` and edit the values accordingly.
 
 ## API Endpoints
 
