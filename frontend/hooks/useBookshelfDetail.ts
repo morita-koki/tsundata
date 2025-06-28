@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { bookshelfApi, bookApi, type Bookshelf, type UserBook } from '@/lib/api';
 import { useInitialMinimumLoading } from './useMinimumLoading';
 import { useToast } from './useToast';
+import { useErrorHandler } from './useErrorHandler';
 import { SUCCESS_MESSAGES, ERROR_MESSAGES } from '@/constants/messages';
 import type { LoadingState } from '@/types/common';
 
@@ -28,7 +29,8 @@ interface UseBookshelfDetailReturn extends BookshelfDetailState {
  * 本棚データの取得・更新・本の追加削除・編集モード管理
  */
 export function useBookshelfDetail(bookshelfId: number): UseBookshelfDetailReturn {
-  const { showSuccess, showError } = useToast();
+  const { showSuccess } = useToast();
+  const { handleApiError } = useErrorHandler();
   
   const [detailState, setDetailState] = useState<BookshelfDetailState>({
     bookshelf: null,
@@ -81,10 +83,10 @@ export function useBookshelfDetail(bookshelfId: number): UseBookshelfDetailRetur
         isLoading: false,
         error: ERROR_MESSAGES.BOOKSHELF_LOAD_FAILED,
       }));
-      showError(ERROR_MESSAGES.BOOKSHELF_LOAD_FAILED);
+      handleApiError(error as any, ERROR_MESSAGES.BOOKSHELF_LOAD_FAILED);
       throw error;
     }
-  }, [bookshelfId, showError]);
+  }, [bookshelfId, handleApiError]);
 
   /**
    * 本棚情報を更新
@@ -103,11 +105,10 @@ export function useBookshelfDetail(bookshelfId: number): UseBookshelfDetailRetur
       
       showSuccess(SUCCESS_MESSAGES.BOOKSHELF_UPDATED);
     } catch (error) {
-      console.error('Failed to update bookshelf:', error);
-      showError(ERROR_MESSAGES.BOOKSHELF_UPDATE_FAILED);
+      handleApiError(error as any, ERROR_MESSAGES.BOOKSHELF_UPDATE_FAILED);
       throw error;
     }
-  }, [bookshelfId, loadBookshelf, showSuccess, showError]);
+  }, [bookshelfId, loadBookshelf, showSuccess, handleApiError]);
 
   /**
    * 本棚に本を追加
@@ -118,11 +119,10 @@ export function useBookshelfDetail(bookshelfId: number): UseBookshelfDetailRetur
       await loadBookshelf();
       showSuccess(SUCCESS_MESSAGES.BOOK_ADDED_TO_BOOKSHELF);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || ERROR_MESSAGES.BOOK_ADD_TO_BOOKSHELF_FAILED;
-      showError(errorMessage);
+      handleApiError(error, ERROR_MESSAGES.BOOK_ADD_TO_BOOKSHELF_FAILED);
       throw error;
     }
-  }, [bookshelfId, loadBookshelf, showSuccess, showError]);
+  }, [bookshelfId, loadBookshelf, showSuccess, handleApiError]);
 
   /**
    * 本棚から本を削除
@@ -133,11 +133,10 @@ export function useBookshelfDetail(bookshelfId: number): UseBookshelfDetailRetur
       await loadBookshelf();
       showSuccess(SUCCESS_MESSAGES.BOOK_REMOVED_FROM_BOOKSHELF);
     } catch (error) {
-      console.error('Failed to remove book from bookshelf:', error);
-      showError(ERROR_MESSAGES.BOOK_REMOVE_FROM_BOOKSHELF_FAILED);
+      handleApiError(error as any, ERROR_MESSAGES.BOOK_REMOVE_FROM_BOOKSHELF_FAILED);
       throw error;
     }
-  }, [bookshelfId, loadBookshelf, showSuccess, showError]);
+  }, [bookshelfId, loadBookshelf, showSuccess, handleApiError]);
 
   /**
    * 編集モードに入る

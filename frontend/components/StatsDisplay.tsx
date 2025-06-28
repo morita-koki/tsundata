@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
 
 interface Stats {
   totalBooks: number;
@@ -16,9 +16,18 @@ interface StatsDisplayProps {
 }
 
 export default function StatsDisplay({ stats, title }: StatsDisplayProps) {
-
-  const readPercentage = stats.totalBooks > 0 ? (stats.readBooks / stats.totalBooks) * 100 : 0;
-  const unreadPercentage = 100 - readPercentage;
+  // 計算結果をメモ化してパフォーマンス向上
+  const { readPercentage, unreadPercentage, tsundokuRate } = useMemo(() => {
+    const readPct = stats.totalBooks > 0 ? (stats.readBooks / stats.totalBooks) * 100 : 0;
+    const unreadPct = 100 - readPct;
+    const tsundokuPct = stats.totalValue > 0 ? (stats.unreadValue / stats.totalValue) * 100 : 0;
+    
+    return {
+      readPercentage: readPct,
+      unreadPercentage: unreadPct,
+      tsundokuRate: tsundokuPct
+    };
+  }, [stats.totalBooks, stats.readBooks, stats.totalValue, stats.unreadValue]);
 
   const CircularProgress = ({ percentage, color, size = 120 }: { percentage: number; color: string; size?: number }) => {
     const strokeWidth = 8;
@@ -140,7 +149,7 @@ export default function StatsDisplay({ stats, title }: StatsDisplayProps) {
               <div className="mt-3 p-3 bg-red-50 rounded-lg">
                 <div className="text-center">
                   <div className="text-sm font-semibold text-red-700">
-                    積読率: {Math.round((stats.unreadValue / stats.totalValue) * 100)}%
+                    積読率: {Math.round(tsundokuRate)}%
                   </div>
                   <div className="text-xs text-red-600 mt-1">
                     ¥{stats.unreadValue.toLocaleString()} 分の本が未読です
