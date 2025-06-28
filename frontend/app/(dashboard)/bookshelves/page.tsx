@@ -1,134 +1,70 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { bookshelfApi, Bookshelf } from "@/lib/api";
 import BookshelfEditModal from "@/components/BookshelfEditModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Navigation from "@/components/Navigation";
 import Toast from "@/components/Toast";
 import LoadingPage from "@/components/LoadingPage";
+import BookshelfGrid from "@/components/BookshelfGrid";
+import BookshelfCreateForm from "@/components/BookshelfCreateForm";
 import { useToast } from "@/hooks/useToast";
-import { useInitialMinimumLoading } from "@/hooks/useMinimumLoading";
+import { useAuth } from "@/hooks/useAuth";
+import { useBookshelfManagement } from "@/hooks/useBookshelfManagement";
+import { useBookshelfForm } from "@/hooks/useBookshelfForm";
 
 export default function BookshelvesPage() {
-  const [bookshelves, setBookshelves] = useState<Bookshelf[]>([]);
-  const [publicBookshelves, setPublicBookshelves] = useState<Bookshelf[]>([]);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newBookshelfName, setNewBookshelfName] = useState("");
-  const [newBookshelfDescription, setNewBookshelfDescription] = useState("");
-  const [editingBookshelf, setEditingBookshelf] = useState<Bookshelf | null>(
-    null
-  );
-  const [deleteBookshelf, setDeleteBookshelf] = useState<Bookshelf | null>(
-    null
-  );
-  const router = useRouter();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast } = useToast();
+  
+  // 認証管理
+  const { isAuthenticated } = useAuth();
+  
+  // 本棚管理
+  const {
+    bookshelves,
+    publicBookshelves,
+    isLoading,
+    createBookshelf,
+    updateBookshelf,
+    deleteBookshelf,
+    toggleVisibility,
+  } = useBookshelfManagement();
+  
+  // フォーム管理
+  const {
+    showCreateForm,
+    createForm,
+    editingBookshelf,
+    deleteBookshelf: deleteBookshelfState,
+    openCreateForm,
+    closeCreateForm,
+    updateCreateForm,
+    resetCreateForm,
+    startEditing,
+    cancelEditing,
+    startDeleting,
+    cancelDeleting,
+    getCreateFormData,
+  } = useBookshelfForm();
 
-  const loadBookshelves = async () => {
-    const [myBookshelves, publicData] = await Promise.all([
-      bookshelfApi.getAll(),
-      bookshelfApi.getPublic(),
-    ]);
 
-    setBookshelves(myBookshelves);
-    setPublicBookshelves(publicData);
-  };
-
-  const isLoading = useInitialMinimumLoading(loadBookshelves, []);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          // Get fresh token and store it
-          const token = await firebaseUser.getIdToken();
-          localStorage.setItem("token", token);
-        } catch (error) {
-          console.error("Auth state change error:", error);
-          router.push("/login");
-        }
-      } else {
-        router.push("/login");
-      }
-    });
-
-    return () => unsubscribe();
-  }, [router]);
-
-  const createBookshelf = async (e: React.FormEvent) => {
+  // フォーム送信ハンドラー
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBookshelfName.trim()) return;
-
-    try {
-      const newBookshelf = await bookshelfApi.create(
-        newBookshelfName,
-        newBookshelfDescription
-      );
-      setBookshelves((prev) => [...prev, newBookshelf]);
-      setNewBookshelfName("");
-      setNewBookshelfDescription("");
-      setShowCreateForm(false);
-    } catch (error) {
-      alert("本棚の作成に失敗しました");
-    }
+    const formData = getCreateFormData();
+    await createBookshelf(formData);
+    resetCreateForm();
   };
 
-  const toggleVisibility = async (
-    bookshelfId: number,
-    isCurrentlyPublic: boolean
-  ) => {
-    try {
-      const updatedBookshelf = await bookshelfApi.updateVisibility(
-        bookshelfId,
-        !isCurrentlyPublic
-      );
-      setBookshelves((prev) =>
-        prev.map((bs) => (bs.id === bookshelfId ? updatedBookshelf : bs))
-      );
-      loadBookshelves(); // Refresh both lists
-      showSuccess("本棚の公開設定を変更しました");
-    } catch (error) {
-      showError("本棚の公開設定の変更に失敗しました");
-    }
-  };
-
-  const handleEditBookshelf = async (name: string, description: string, isPublic: boolean) => {
+  const handleEdit = async (name: string, description: string, isPublic: boolean) => {
     if (!editingBookshelf) return;
-    
-    try {
-      const updatedBookshelf = await bookshelfApi.update(editingBookshelf.id, name, description, isPublic);
-      setBookshelves((prev) =>
-        prev.map((bs) =>
-          bs.id === editingBookshelf.id ? updatedBookshelf : bs
-        )
-      );
-      setEditingBookshelf(null);
-      loadBookshelves(); // Refresh both lists
-      // Notify sidebar of the update
-      window.dispatchEvent(new Event('bookshelfUpdated'));
-      showSuccess("本棚を更新しました");
-    } catch (error) {
-      showError("本棚の更新に失敗しました");
-    }
+    await updateBookshelf(editingBookshelf.id, name, description, isPublic);
+    cancelEditing();
   };
 
-  const handleDeleteBookshelf = async () => {
-    if (!deleteBookshelf) return;
-
-    try {
-      await bookshelfApi.delete(deleteBookshelf.id);
-      setBookshelves((prev) =>
-        prev.filter((bs) => bs.id !== deleteBookshelf.id)
-      );
-      setDeleteBookshelf(null);
-      showSuccess("本棚を削除しました");
-    } catch (error) {
-      showError("本棚の削除に失敗しました");
-    }
+  const handleDelete = async () => {
+    if (!deleteBookshelfState) return;
+    await deleteBookshelf(deleteBookshelfState.id);
+    cancelDeleting();
   };
 
   if (isLoading) {
@@ -145,156 +81,51 @@ export default function BookshelvesPage() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-900">マイ本棚</h2>
             <button
-              onClick={() => setShowCreateForm(true)}
+              onClick={openCreateForm}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
             >
               新しい本棚を作成
             </button>
           </div>
 
-          {showCreateForm && (
-            <form
-              onSubmit={createBookshelf}
-              className="bg-white p-4 rounded-lg shadow mb-4"
-            >
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  本棚名
-                </label>
-                <input
-                  type="text"
-                  value={newBookshelfName}
-                  onChange={(e) => setNewBookshelfName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  説明（オプション）
-                </label>
-                <textarea
-                  value={newBookshelfDescription}
-                  onChange={(e) => setNewBookshelfDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  rows={3}
-                />
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded"
-                >
-                  作成
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateForm(false)}
-                  className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded"
-                >
-                  キャンセル
-                </button>
-              </div>
-            </form>
-          )}
+          <BookshelfCreateForm
+            isVisible={showCreateForm}
+            formData={createForm}
+            onSubmit={handleCreateSubmit}
+            onCancel={closeCreateForm}
+            onUpdateField={updateCreateForm}
+          />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {bookshelves.map((bookshelf) => (
-              <div
-                key={bookshelf.id}
-                className="bg-white rounded-lg shadow p-6"
-              >
-                <h3 className="font-bold text-lg mb-2">{bookshelf.name}</h3>
-                {bookshelf.description && (
-                  <p className="text-gray-600 mb-4">{bookshelf.description}</p>
-                )}
-
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <a
-                      href={`/bookshelves/${bookshelf.id}`}
-                      className="text-indigo-600 hover:text-indigo-500"
-                    >
-                      本棚を見る
-                    </a>
-
-                    <button
-                      onClick={() =>
-                        toggleVisibility(bookshelf.id, bookshelf.isPublic)
-                      }
-                      className={`px-3 py-1 rounded text-sm font-medium ${
-                        bookshelf.isPublic
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {bookshelf.isPublic ? "公開中" : "非公開"}
-                    </button>
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setEditingBookshelf(bookshelf)}
-                      className="flex-1 px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                    >
-                      編集
-                    </button>
-                    <button
-                      onClick={() => setDeleteBookshelf(bookshelf)}
-                      className="flex-1 px-3 py-1 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                    >
-                      削除
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <BookshelfGrid
+            bookshelves={bookshelves}
+            isOwner={true}
+            onEdit={startEditing}
+            onDelete={startDeleting}
+            onToggleVisibility={toggleVisibility}
+          />
         </div>
 
         {/* Public Bookshelves */}
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">公開本棚</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {publicBookshelves.map((bookshelf) => (
-              <div
-                key={bookshelf.id}
-                className="bg-white rounded-lg shadow p-6"
-              >
-                <h3 className="font-bold text-lg mb-2">{bookshelf.name}</h3>
-                {bookshelf.description && (
-                  <p className="text-gray-600 mb-2">{bookshelf.description}</p>
-                )}
-                <p className="text-sm text-gray-500 mb-4">
-                  作成者: {bookshelf.user?.username}
-                </p>
-
-                <a
-                  href={`/bookshelves/${bookshelf.id}`}
-                  className="text-indigo-600 hover:text-indigo-500"
-                >
-                  本棚を見る
-                </a>
-              </div>
-            ))}
-          </div>
+          <BookshelfGrid bookshelves={publicBookshelves} />
         </div>
       </div>
 
       <BookshelfEditModal
         bookshelf={editingBookshelf}
         isOpen={!!editingBookshelf}
-        onClose={() => setEditingBookshelf(null)}
-        onSave={handleEditBookshelf}
+        onClose={cancelEditing}
+        onSave={handleEdit}
       />
 
       <ConfirmDialog
-        isOpen={!!deleteBookshelf}
+        isOpen={!!deleteBookshelfState}
         title="本棚を削除"
-        message={`「${deleteBookshelf?.name}」を削除しますか？この操作は取り消せません。`}
+        message={`「${deleteBookshelfState?.name}」を削除しますか？この操作は取り消せません。`}
         confirmText="削除"
-        onConfirm={handleDeleteBookshelf}
-        onCancel={() => setDeleteBookshelf(null)}
+        onConfirm={handleDelete}
+        onCancel={cancelDeleting}
         isDangerous
       />
 
