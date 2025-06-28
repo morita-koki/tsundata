@@ -63,8 +63,9 @@ export default function Navigation({ title, onMenuClick }: NavigationProps) {
               <button
                 onClick={onMenuClick}
                 className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                aria-label="サイドバーを開く"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
@@ -101,6 +102,9 @@ export default function Navigation({ title, onMenuClick }: NavigationProps) {
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="flex items-center text-sm rounded-lg bg-gray-100 hover:bg-gray-200 px-2 py-1.5 transition-colors"
+                aria-label="ユーザーメニューを開く"
+                aria-expanded={isMenuOpen}
+                aria-haspopup="true"
               >
                 {firebaseUser?.photoURL ? (
                   <img
@@ -118,13 +122,18 @@ export default function Navigation({ title, onMenuClick }: NavigationProps) {
               </button>
 
               {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                <div 
+                  className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border"
+                  role="menu"
+                  aria-labelledby="user-menu-button"
+                >
                   <div className="px-4 py-2 text-sm text-gray-700 border-b">
                     {firebaseUser?.email || user?.email}
                   </div>
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    role="menuitem"
                   >
                     サインアウト
                   </button>

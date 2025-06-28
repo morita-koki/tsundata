@@ -1,27 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-
-interface Book {
-  id: number;
-  isbn: string;
-  title: string;
-  author: string;
-  publisher: string;
-  publishedDate: string;
-  description: string;
-  pageCount: number;
-  thumbnail: string;
-  price: number;
-}
-
-interface UserBook {
-  id: number;
-  isRead: boolean;
-  addedAt: string;
-  readAt: string | null;
-  book: Book;
-}
+import type { UserBook } from '@/types/api';
+import { getReadingStatus, getReadStatusToggleText } from '@/utils/readingStatus';
+import { getBookImageClasses, getBookImageFallbackClasses } from '@/utils/imageError';
 
 interface SimpleBookCardProps {
   userBook: UserBook;
@@ -32,24 +14,9 @@ interface SimpleBookCardProps {
 export default function SimpleBookCard({ userBook, onToggleRead, onRemove }: SimpleBookCardProps) {
   const [imageError, setImageError] = useState(false);
 
-  const getReadingStatus = () => {
-    if (userBook.isRead) {
-      return {
-        icon: '✓',
-        text: '読了',
-        color: 'bg-green-100 text-green-800',
-        bgColor: 'bg-green-50'
-      };
-    }
-    return {
-      icon: '○',
-      text: '未読',
-      color: 'bg-gray-100 text-gray-600',
-      bgColor: 'bg-gray-50'
-    };
-  };
-
-  const status = getReadingStatus();
+  const status = getReadingStatus(userBook.isRead);
+  const imageClasses = getBookImageClasses('medium');
+  const fallbackClasses = getBookImageFallbackClasses('medium');
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow duration-200">
@@ -60,12 +27,12 @@ export default function SimpleBookCard({ userBook, onToggleRead, onRemove }: Sim
             <img
               src={userBook.book.thumbnail}
               alt={userBook.book.title}
-              className="w-16 h-24 object-cover rounded-lg shadow-sm"
+              className={imageClasses}
               onError={() => setImageError(true)}
             />
           ) : (
-            <div className="w-16 h-24 bg-gradient-to-br from-blue-100 to-purple-200 rounded-lg shadow-sm flex items-center justify-center">
-              <span className="text-blue-600 text-2xl">📚</span>
+            <div className={fallbackClasses.className}>
+              <span className={fallbackClasses.iconClassName}>📚</span>
             </div>
           )}
         </div>
@@ -102,7 +69,7 @@ export default function SimpleBookCard({ userBook, onToggleRead, onRemove }: Sim
                   : 'bg-green-100 text-green-700 hover:bg-green-200'
               }`}
             >
-              {userBook.isRead ? '未読に戻す' : '読了にする'}
+              {getReadStatusToggleText(userBook.isRead)}
             </button>
             <button
               onClick={() => onRemove(userBook)}

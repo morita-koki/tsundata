@@ -1,29 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import BookCard from './BookCard';
-
-interface Book {
-  id: number;
-  isbn: string;
-  title: string;
-  author: string;
-  publisher: string;
-  publishedDate: string;
-  description: string;
-  pageCount: number;
-  thumbnail: string;
-  price: number;
-}
-
-interface BookshelfBook {
-  userBookId: number;
-  addedAt: string;
-  displayOrder: number;
-  isRead: boolean;
-  readAt: string | null;
-  book: Book;
-}
+import type { BookshelfBook } from '@/types/api';
 
 interface BookListProps {
   books: BookshelfBook[];

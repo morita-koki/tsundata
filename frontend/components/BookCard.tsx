@@ -1,28 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-
-interface Book {
-  id: number;
-  isbn: string;
-  title: string;
-  author: string;
-  publisher: string;
-  publishedDate: string;
-  description: string;
-  pageCount: number;
-  thumbnail: string;
-  price: number;
-}
-
-interface BookshelfBook {
-  userBookId: number;
-  addedAt: string;
-  displayOrder: number;
-  isRead: boolean;
-  readAt: string | null;
-  book: Book;
-}
+import type { BookshelfBook } from '@/types/api';
+import { getReadingStatus, getReadStatusToggleStyle } from '@/utils/readingStatus';
+import { getBookImageClasses, getBookImageFallbackClasses } from '@/utils/imageError';
 
 interface BookCardProps {
   bookshelfBook: BookshelfBook;
@@ -47,24 +28,9 @@ export default function BookCard({
 }: BookCardProps) {
   const [imageError, setImageError] = useState(false);
 
-  const getReadingStatus = () => {
-    if (bookshelfBook.isRead) {
-      return {
-        icon: '✓',
-        text: '読了',
-        color: 'bg-green-100 text-green-800',
-        bgColor: 'bg-green-50'
-      };
-    }
-    return {
-      icon: '○',
-      text: '未読',
-      color: 'bg-gray-100 text-gray-600',
-      bgColor: 'bg-gray-50'
-    };
-  };
-
-  const status = getReadingStatus();
+  const status = getReadingStatus(bookshelfBook.isRead);
+  const imageClasses = getBookImageClasses('small');
+  const fallbackClasses = getBookImageFallbackClasses('small');
 
   return (
     <div className="p-3 hover:bg-gray-50 transition-colors duration-150">
@@ -73,12 +39,12 @@ export default function BookCard({
           <img
             src={bookshelfBook.book.thumbnail}
             alt={bookshelfBook.book.title}
-            className="w-10 h-14 object-cover rounded shadow-sm flex-shrink-0"
+            className={imageClasses}
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="w-10 h-14 bg-gradient-to-br from-blue-100 to-blue-200 rounded shadow-sm flex items-center justify-center flex-shrink-0">
-            <span className="text-blue-600 text-lg">📖</span>
+          <div className={fallbackClasses.className}>
+            <span className={fallbackClasses.iconClassName}>📖</span>
           </div>
         )}
         
@@ -95,11 +61,7 @@ export default function BookCard({
                   e.stopPropagation();
                   onUpdateReadStatus(bookshelfBook.userBookId, !bookshelfBook.isRead);
                 }}
-                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
-                  bookshelfBook.isRead 
-                    ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-orange-100 hover:text-orange-700'
-                }`}
+                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium transition-colors ${getReadStatusToggleStyle(bookshelfBook.isRead)}`}
               >
                 <span className="mr-0.5">{status.icon}</span>
                 {status.text}
