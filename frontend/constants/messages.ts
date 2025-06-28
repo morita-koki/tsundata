@@ -33,6 +33,8 @@ export const ERROR_MESSAGES = {
   BOOKSHELF_VISIBILITY_CHANGE_FAILED: '本棚の公開設定の変更に失敗しました',
   BOOKSHELF_LOAD_FAILED: '本棚の読み込みに失敗しました',
   BOOKS_LOAD_FAILED: '本の読み込みに失敗しました',
+  BOOK_ADD_TO_BOOKSHELF_FAILED: '本の追加に失敗しました',
+  BOOK_REMOVE_FROM_BOOKSHELF_FAILED: '本の削除に失敗しました',
   LOGIN_FAILED: 'ログインに失敗しました',
   LOGOUT_FAILED: 'ログアウトに失敗しました',
   REGISTRATION_FAILED: 'アカウント作成に失敗しました',
