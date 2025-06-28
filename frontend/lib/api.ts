@@ -1,5 +1,13 @@
 import axios from 'axios';
 import { auth } from './firebase';
+import type {
+  User,
+  Book,
+  UserBook,
+  BookshelfBook,
+  Bookshelf,
+  Stats
+} from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -31,60 +39,15 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-export interface User {
-  id: number;
-  username: string;
-  email: string;
-}
-
-export interface Book {
-  id: number;
-  isbn: string;
-  title: string;
-  author: string;
-  publisher: string;
-  publishedDate: string;
-  description: string;
-  pageCount: number;
-  thumbnail: string;
-  price: number;
-}
-
-export interface UserBook {
-  id: number;
-  isRead: boolean;
-  addedAt: string;
-  readAt: string | null;
-  book: Book;
-}
-
-export interface Bookshelf {
-  id: number;
-  name: string;
-  description: string;
-  isPublic: boolean;
-  createdAt: string;
-  user?: {
-    id: number;
-    username: string;
-  };
-  books?: Array<{
-    userBookId: number;
-    addedAt: string;
-    displayOrder: number;
-    isRead: boolean;
-    readAt: string | null;
-    book: Book;
-  }>;
-}
-
-export interface Stats {
-  totalBooks: number;
-  unreadBooks: number;
-  readBooks: number;
-  totalValue: number;
-  unreadValue: number;
-}
+// Re-export types for backward compatibility
+export type {
+  User,
+  Book,
+  UserBook,
+  BookshelfBook,
+  Bookshelf,
+  Stats
+} from '@/types/api';
 
 export const authApi = {
   syncUser: async () => {
