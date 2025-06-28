@@ -4,17 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Development Commands
 
-### Backend (Node.js/Express)
+### Docker Environment (Recommended)
+```bash
+# Quick setup with HTTPS (installs dependencies automatically)
+make https
+
+# Or manual setup
+docker compose up -d
+
+# Other useful commands
+make up              # Start all services
+make down            # Stop all services
+make logs            # View all logs
+make restart         # Restart services
+make clean           # Clean containers and volumes
+
+# Package management (if needed)
+docker compose exec backend npm install [package]
+docker compose exec frontend npm install [package]
+```
+
+### Direct Development (Alternative - Not Recommended)
+
+**Note**: Direct development requires manual dependency management and lacks HTTPS setup needed for camera features.
+
+**Backend (Node.js/Express)**:
 ```bash
 cd bookshelf-app/backend
 npm install
-npm run dev           # Start development server with nodemon
-npm start            # Start production server
-npm run db:generate  # Generate Drizzle schema
-npm run db:migrate   # Run database migrations
+npm run dev          # Start development server with nodemon
+npm start           # Start production server
 ```
 
-### Frontend (Next.js)
+**Frontend (Next.js)**:
 ```bash
 cd bookshelf-app/frontend
 npm install
@@ -31,6 +53,16 @@ This is a Japanese bookshelf management application (本棚アプリ) with barco
 ### Tech Stack
 - **Backend**: Node.js, Express.js, Drizzle ORM, SQLite, Firebase Auth
 - **Frontend**: Next.js 15 (App Router), TypeScript, Tailwind CSS, html5-qrcode
+- **Infrastructure**: Docker, Nginx (reverse proxy with HTTPS), Alpine Linux
+
+### Development Environment
+The application runs in a containerized environment with 4 services:
+- **Database**: SQLite with persistent volume
+- **Backend**: Node.js API server (port 3001)  
+- **Frontend**: Next.js application (port 3000)
+- **Nginx**: Reverse proxy with SSL termination (ports 80/443)
+
+**Access URL**: https://localhost (HTTPS required for camera/barcode features)
 
 ### Key Components
 
@@ -49,7 +81,7 @@ This is a Japanese bookshelf management application (本棚アプリ) with barco
 - `lib/firebase.ts` - Firebase client configuration
 
 ### Database Schema
-SQLite database with tables: users, books, user_books, bookshelves, bookshelf_books, follows, blocks. The database uses raw SQL for table creation rather than migrations.
+SQLite database with tables: users, books, user_books, bookshelves, bookshelf_books, follows, blocks. Uses hybrid approach: raw SQL for table creation in `database.js`, Drizzle ORM for data operations and type safety.
 
 ### Authentication Flow
 Uses Firebase Authentication with custom backend user sync. Frontend gets Firebase tokens and passes them to backend via Authorization header.
@@ -61,7 +93,7 @@ Environment variables are managed in a single `.env` file at the project root:
 **Required Variables** (copy from `.env.example`):
 - `JWT_SECRET` - JWT signing secret for backend authentication
 - `GOOGLE_BOOKS_API_KEY` - Google Books API key
-- `NEXT_PUBLIC_API_URL` - Backend API URL (default https://localhost/api)
+- `NEXT_PUBLIC_API_URL` - Backend API URL (https://localhost/api for Docker setup)
 - `NEXT_PUBLIC_FIREBASE_API_KEY` - Firebase API key
 - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` - Firebase auth domain
 - `NEXT_PUBLIC_FIREBASE_PROJECT_ID` - Firebase project ID
@@ -69,7 +101,7 @@ Environment variables are managed in a single `.env` file at the project root:
 - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` - Firebase messaging sender ID
 - `NEXT_PUBLIC_FIREBASE_APP_ID` - Firebase app ID
 
-**Setup**: `cp .env.example .env` and edit the values accordingly.
+**Setup**: `cp .env.example .env` and edit the values accordingly. The Docker environment uses HTTPS by default for camera access compatibility.
 
 ## API Endpoints
 
