@@ -1,64 +1,39 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { bookApi, UserBook } from '@/lib/api';
 import Toast from '@/components/Toast';
 import BookList from '@/components/BookList';
 import LoadingPage from '@/components/LoadingPage';
 import { useToast } from '@/hooks/useToast';
 import { usePageTitle } from '@/contexts/PageContext';
+import { useBookLibrary } from '@/hooks/useBookLibrary';
+import { useBookStatus } from '@/hooks/useBookStatus';
 
 export default function AllBooksPage() {
-  const [user, setUser] = useState<any>(null);
-  const [allBooks, setAllBooks] = useState<UserBook[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast } = useToast();
   const { setPageTitle } = usePageTitle();
+  
+  // 書籍ライブラリ管理
+  const {
+    allBooks,
+    stats,
+    isLoading,
+    refreshBooks,
+    getTransformedBooks,
+  } = useBookLibrary();
+  
+  // 読了状態管理
+  const { updateReadStatus } = useBookStatus({
+    onStatusUpdate: refreshBooks, // ステータス更新後に書籍データを再読み込み
+  });
 
   useEffect(() => {
     setPageTitle('全ての本');
-    loadBooks();
   }, [setPageTitle]);
 
-  const loadBooks = async () => {
-    try {
-      console.log('📖 Loading all books...');
-      const libraryData = await bookApi.getLibrary();
-      console.log('📚 Library data:', libraryData);
-      setAllBooks(libraryData);
-    } catch (error) {
-      console.error('❌ Failed to load books:', error);
-      showError('本の読み込みに失敗しました');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleUpdateReadStatus = async (userBookId: number, isRead: boolean) => {
-    try {
-      await bookApi.updateReadStatus(userBookId, isRead);
-      loadBooks(); // Refresh data to show updated status
-      showSuccess(isRead ? '本を読了に変更しました！' : '本を未読に変更しました');
-    } catch (error: any) {
-      console.error('Failed to update read status:', error);
-      showError('読書状況の変更に失敗しました');
-    }
-  };
-
-  // Transform UserBook[] to BookshelfBook[] format for BookList component
-  const transformedBooks = allBooks.map((userBook, index) => ({
-    userBookId: userBook.id,
-    addedAt: userBook.addedAt,
-    displayOrder: index,
-    isRead: userBook.isRead,
-    readAt: userBook.readAt,
-    book: userBook.book
-  }));
-
-  const readBooks = allBooks.filter(book => book.isRead);
-  const unreadBooks = allBooks.filter(book => !book.isRead);
+  const transformedBooks = getTransformedBooks();
 
   if (isLoading) {
     return <LoadingPage text="書籍一覧を読み込み中..." />;
@@ -71,11 +46,11 @@ export default function AllBooksPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">全ての本</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
-              <span>全{allBooks.length}冊</span>
+              <span>全{stats.totalBooks}冊</span>
               <span>•</span>
-              <span className="text-green-600">読了 {readBooks.length}冊</span>
+              <span className="text-green-600">読了 {stats.readBooks}冊</span>
               <span>•</span>
-              <span className="text-orange-600">未読 {unreadBooks.length}冊</span>
+              <span className="text-orange-600">未読 {stats.unreadBooks}冊</span>
             </div>
           </div>
           <button
@@ -98,7 +73,7 @@ export default function AllBooksPage() {
             isOwner={true}
             isEditMode={false}
             onRemoveBook={() => {}}
-            onUpdateReadStatus={handleUpdateReadStatus}
+            onUpdateReadStatus={updateReadStatus}
           />
         )}
       </div>
