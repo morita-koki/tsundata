@@ -60,8 +60,10 @@ export class ApiQuotaExceededError extends ExternalApiError {
 
 // Specific API errors
 export class GoogleBooksApiError extends ExternalApiError {
-  constructor(message: string, endpoint?: string, originalError?: Error) {
+  constructor(message: string, statusCode: HttpStatusCode = HttpStatusCode.SERVICE_UNAVAILABLE, originalError?: Error, endpoint?: string) {
     super('Google Books API', message, endpoint, originalError);
+    // Override the base class statusCode by updating it
+    (this as any).statusCode = statusCode;
   }
 }
 

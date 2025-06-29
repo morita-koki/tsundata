@@ -1,38 +1,57 @@
 /**
  * Book Search Service
  * Handles external API integration for book information retrieval
+ * with retry logic, circuit breaker, and caching
  */
 
 import axios from 'axios';
 import { JSDOM } from 'jsdom';
 import { BaseService } from './BaseService.js';
+import { GoogleBooksApiService } from './GoogleBooksApiService.js';
 import type { RepositoryContainer } from '../repositories/index.js';
 import type { ExternalBookData } from '../types/api.js';
 import {
   ExternalApiError,
-  GoogleBooksApiError,
   NdlApiError,
   BookSearchError,
   InvalidIsbnError,
   ApiTimeoutError,
   ApiRateLimitError,
 } from '../errors/index.js';
+import { getApiConfiguration, type ExternalApiConfiguration } from '../config/externalApi.js';
+
+interface CacheEntry {
+  data: ExternalBookData;
+  timestamp: number;
+}
+
+interface CircuitBreakerState {
+  failureCount: number;
+  lastFailureTime: number;
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+}
 
 export class BookSearchService extends BaseService {
-  private readonly GOOGLE_BOOKS_API_KEY: string;
-  private readonly REQUEST_TIMEOUT = 10000; // 10 seconds
+  private readonly config: ExternalApiConfiguration;
+  private readonly cache: Map<string, CacheEntry> = new Map();
+  private readonly circuitBreakers: Map<string, CircuitBreakerState> = new Map();
+  private readonly googleBooksService: GoogleBooksApiService;
 
   constructor(repositories: RepositoryContainer) {
     super(repositories);
+    this.config = getApiConfiguration();
+    this.googleBooksService = new GoogleBooksApiService(repositories);
     
-    this.GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY || '';
-    if (!this.GOOGLE_BOOKS_API_KEY) {
-      console.warn('Google Books API key not configured');
-    }
+    // Initialize circuit breakers (only for NDL since Google Books has its own)
+    this.circuitBreakers.set('ndl', {
+      failureCount: 0,
+      lastFailureTime: 0,
+      state: 'CLOSED'
+    });
   }
 
   /**
-   * Searches for book information by ISBN using multiple APIs
+   * Searches for book information by ISBN using multiple APIs with caching
    */
   async searchByISBN(isbn: string): Promise<ExternalBookData> {
     // Validate ISBN format
@@ -40,28 +59,43 @@ export class BookSearchService extends BaseService {
 
     console.log(`📚 Starting book search for ISBN: ${isbn}`);
     
+    // Check cache first
+    const cached = this.getFromCache(isbn);
+    if (cached) {
+      console.log('✅ Book found in cache:', cached.title);
+      return cached;
+    }
+    
     const searchErrors: ExternalApiError[] = [];
 
     // Try NDL API first (for Japanese books)
-    try {
-      console.log('🔍 Trying NDL API...');
-      const bookData = await this.searchWithNDL(isbn);
-      if (bookData) {
-        console.log('✅ Book found via NDL API:', bookData.title);
-        return bookData;
+    if (this.isCircuitBreakerClosed('ndl')) {
+      try {
+        console.log('🔍 Trying NDL API...');
+        const bookData = await this.searchWithNDL(isbn);
+        if (bookData) {
+          console.log('✅ Book found via NDL API:', bookData.title);
+          this.recordSuccess('ndl');
+          this.putInCache(isbn, bookData);
+          return bookData;
+        }
+        console.log('❌ NDL API returned no results');
+      } catch (error) {
+        console.log('❌ NDL API search failed:', (error as Error).message);
+        this.recordFailure('ndl');
+        searchErrors.push(error as ExternalApiError);
       }
-      console.log('❌ NDL API returned no results');
-    } catch (error) {
-      console.log('❌ NDL API search failed:', (error as Error).message);
-      searchErrors.push(error as ExternalApiError);
+    } else {
+      console.log('⚡ NDL API circuit breaker is OPEN, skipping');
     }
 
-    // Try Google Books API
+    // Try Google Books API (with enhanced error handling)
     try {
       console.log('🔍 Trying Google Books API...');
-      const bookData = await this.searchWithGoogleBooks(isbn);
+      const bookData = await this.googleBooksService.searchByISBN(isbn);
       if (bookData) {
         console.log('✅ Book found via Google Books API:', bookData.title);
+        this.putInCache(isbn, bookData);
         return bookData;
       }
       console.log('❌ Google Books API returned no results');
@@ -75,7 +109,82 @@ export class BookSearchService extends BaseService {
   }
 
   /**
-   * Validates ISBN format
+   * Cache management methods
+   */
+  private getFromCache(isbn: string): ExternalBookData | null {
+    const entry = this.cache.get(isbn);
+    if (!entry) return null;
+    
+    const now = Date.now();
+    if (now - entry.timestamp > this.config.cache.ttlMs) {
+      this.cache.delete(isbn);
+      return null;
+    }
+    
+    return entry.data;
+  }
+
+  private putInCache(isbn: string, data: ExternalBookData): void {
+    // Cleanup old entries if cache is full
+    if (this.cache.size >= this.config.cache.maxEntries) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    
+    this.cache.set(isbn, {
+      data,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Circuit breaker methods (NDL only - Google Books handled separately)
+   */
+  private isCircuitBreakerClosed(apiName: string): boolean {
+    const breaker = this.circuitBreakers.get(apiName);
+    if (!breaker) return true;
+    
+    const now = Date.now();
+    const config = this.config.ndl; // Only NDL uses this circuit breaker
+    
+    if (breaker.state === 'OPEN') {
+      if (now - breaker.lastFailureTime > config.circuitBreakerResetTimeMs) {
+        breaker.state = 'HALF_OPEN';
+        console.log(`⚡ Circuit breaker for ${apiName} moved to HALF_OPEN`);
+        return true;
+      }
+      return false;
+    }
+    
+    return true;
+  }
+
+  private recordSuccess(apiName: string): void {
+    const breaker = this.circuitBreakers.get(apiName);
+    if (breaker) {
+      breaker.failureCount = 0;
+      breaker.state = 'CLOSED';
+    }
+  }
+
+  private recordFailure(apiName: string): void {
+    const breaker = this.circuitBreakers.get(apiName);
+    if (!breaker) return;
+    
+    const config = this.config.ndl; // Only NDL uses circuit breaker here
+    breaker.failureCount++;
+    breaker.lastFailureTime = Date.now();
+    
+    if (breaker.failureCount >= config.circuitBreakerThreshold) {
+      breaker.state = 'OPEN';
+      console.log(`⚡ Circuit breaker for ${apiName} OPENED after ${breaker.failureCount} failures`);
+    }
+  }
+
+  /**
+   * Validates ISBN format with enhanced checksum validation
    */
   private validateISBN(isbn: string): void {
     // Remove hyphens and spaces
@@ -91,131 +200,150 @@ export class BookSearchService extends BaseService {
       if (!/^\d{9}[\dX]$/i.test(cleanISBN)) {
         throw new InvalidIsbnError(isbn);
       }
+      // Validate ISBN-10 checksum
+      if (!this.validateISBN10Checksum(cleanISBN)) {
+        throw new InvalidIsbnError(isbn);
+      }
     } else {
       if (!/^\d{13}$/.test(cleanISBN)) {
+        throw new InvalidIsbnError(isbn);
+      }
+      // Validate ISBN-13 checksum
+      if (!this.validateISBN13Checksum(cleanISBN)) {
         throw new InvalidIsbnError(isbn);
       }
     }
   }
 
+  private validateISBN10Checksum(isbn: string): boolean {
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      const char = isbn[i];
+      if (!char || !/\d/.test(char)) return false;
+      sum += parseInt(char, 10) * (10 - i);
+    }
+    const lastChar = isbn[9];
+    if (!lastChar) return false;
+    const checkDigit = lastChar === 'X' ? 10 : parseInt(lastChar, 10);
+    if (isNaN(checkDigit)) return false;
+    return (sum + checkDigit) % 11 === 0;
+  }
+
+  private validateISBN13Checksum(isbn: string): boolean {
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      const char = isbn[i];
+      if (!char || !/\d/.test(char)) return false;
+      const digit = parseInt(char, 10);
+      sum += i % 2 === 0 ? digit : digit * 3;
+    }
+    const lastChar = isbn[12];
+    if (!lastChar || !/\d/.test(lastChar)) return false;
+    const checkDigit = parseInt(lastChar, 10);
+    return (sum + checkDigit) % 10 === 0;
+  }
+
   /**
-   * Searches using NDL (National Diet Library) API
+   * Searches using NDL (National Diet Library) API with retry logic
    */
   private async searchWithNDL(isbn: string): Promise<ExternalBookData | null> {
-    try {
-      console.log(`📖 NDL API search for ISBN: ${isbn}`);
-      
-      const response = await this.makeRequest(
-        'https://iss.ndl.go.jp/api/sru',
-        {
+    console.log(`📖 NDL API search for ISBN: ${isbn}`);
+    
+    return this.makeRequestWithRetry(
+      async () => {
+        const response = await axios.get(this.config.ndl.baseUrl, {
           params: {
-            operation: 'searchRetrieve',
-            version: '1.2',
-            recordSchema: 'dcndl',
-            onlyBib: 'true',
-            recordPacking: 'xml',
+            ...this.config.ndl.defaultParams,
             query: `isbn="${isbn}" AND dpid=iss-ndl-opac`,
-            maximumRecords: 1,
           },
-        },
-        'NDL API'
-      );
+          timeout: this.config.ndl.timeout,
+        });
 
-      console.log(`📊 NDL API response status: ${response.status}`);
+        console.log(`📊 NDL API response status: ${response.status}`);
 
-      if (response.status !== 200) {
-        throw new NdlApiError(`NDL API returned status ${response.status}`);
-      }
+        if (response.status !== 200) {
+          throw new NdlApiError(`NDL API returned status ${response.status}`);
+        }
 
-      return this.parseNDLResponse(response.data, isbn);
-    } catch (error) {
-      if (error instanceof ExternalApiError) {
-        throw error;
-      }
-      throw new NdlApiError('NDL API request failed', undefined, error as Error);
-    }
+        return this.parseNDLResponse(response.data, isbn);
+      },
+      this.config.ndl,
+      'NDL API'
+    );
   }
 
-  /**
-   * Searches using Google Books API
-   */
-  private async searchWithGoogleBooks(isbn: string): Promise<ExternalBookData | null> {
-    try {
-      console.log(`📖 Google Books API search for ISBN: ${isbn}`);
-
-      if (!this.GOOGLE_BOOKS_API_KEY) {
-        throw new GoogleBooksApiError('Google Books API key not configured');
-      }
-
-      const response = await this.makeRequest(
-        'https://www.googleapis.com/books/v1/volumes',
-        {
-          params: {
-            q: `isbn:${isbn}`,
-            key: this.GOOGLE_BOOKS_API_KEY,
-            maxResults: 1,
-          },
-        },
-        'Google Books API'
-      );
-
-      console.log(`📊 Google Books API response status: ${response.status}`);
-
-      if (response.status !== 200) {
-        throw new GoogleBooksApiError(`Google Books API returned status ${response.status}`);
-      }
-
-      return this.parseGoogleBooksResponse(response.data, isbn);
-    } catch (error) {
-      if (error instanceof ExternalApiError) {
-        throw error;
-      }
-      throw new GoogleBooksApiError('Google Books API request failed', undefined, error as Error);
-    }
-  }
+  // Google Books API method removed - now handled by GoogleBooksApiService
 
   /**
-   * Makes an HTTP request with timeout and error handling
+   * Makes requests with exponential backoff retry logic
    */
-  private async makeRequest(
-    url: string,
-    config: any,
+  private async makeRequestWithRetry<T>(
+    requestFn: () => Promise<T>,
+    apiConfig: { retryAttempts: number; retryDelayMs: number; maxRetryDelayMs: number },
     apiName: string
-  ): Promise<any> {
-    try {
-      const response = await axios.get(url, {
-        ...config,
-        timeout: this.REQUEST_TIMEOUT,
-      });
-      return response;
-    } catch (error: any) {
-      if (error.code === 'ECONNABORTED') {
-        throw new ApiTimeoutError(apiName, url, this.REQUEST_TIMEOUT);
+  ): Promise<T> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= apiConfig.retryAttempts; attempt++) {
+      try {
+        return await requestFn();
+      } catch (error: any) {
+        lastError = error;
+        
+        if (error.code === 'ECONNABORTED') {
+          const timeoutError = new ApiTimeoutError(apiName, '', 0);
+          if (attempt === apiConfig.retryAttempts) {
+            throw timeoutError;
+          }
+          console.log(`⏰ ${apiName} timeout, retrying... (attempt ${attempt + 1}/${apiConfig.retryAttempts})`);
+        } else if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'];
+          const rateLimitError = new ApiRateLimitError(apiName, retryAfter ? parseInt(retryAfter) : undefined);
+          if (attempt === apiConfig.retryAttempts) {
+            throw rateLimitError;
+          }
+          console.log(`🚫 ${apiName} rate limited, retrying... (attempt ${attempt + 1}/${apiConfig.retryAttempts})`);
+        } else if (error.response?.status >= 500) {
+          // Retry on server errors
+          if (attempt === apiConfig.retryAttempts) {
+            throw new ExternalApiError(apiName, `Request failed: ${error.message}`, '', error);
+          }
+          console.log(`🔄 ${apiName} server error, retrying... (attempt ${attempt + 1}/${apiConfig.retryAttempts})`);
+        } else {
+          // Don't retry on client errors (4xx)
+          throw new ExternalApiError(apiName, `Request failed: ${error.message}`, '', error);
+        }
+        
+        if (attempt < apiConfig.retryAttempts) {
+          // Exponential backoff with jitter
+          const baseDelay = apiConfig.retryDelayMs * Math.pow(2, attempt);
+          const jitter = Math.random() * 0.1 * baseDelay;
+          const delay = Math.min(baseDelay + jitter, apiConfig.maxRetryDelayMs);
+          
+          console.log(`⏳ Waiting ${Math.round(delay)}ms before retry...`);
+          await this.sleep(delay);
+        }
       }
-
-      if (error.response?.status === 429) {
-        const retryAfter = error.response.headers['retry-after'];
-        throw new ApiRateLimitError(apiName, retryAfter ? parseInt(retryAfter) : undefined, url);
-      }
-
-      throw new ExternalApiError(
-        apiName,
-        `Request failed: ${error.message}`,
-        url,
-        error
-      );
     }
+    
+    throw lastError || new ExternalApiError(apiName, 'Request failed after retries', '');
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
-   * Parses NDL API XML response
+   * Parses NDL API XML response with enhanced Japanese text processing
    */
   private parseNDLResponse(xmlData: string, isbn: string): ExternalBookData | null {
     try {
       const dom = new JSDOM(xmlData, { contentType: 'text/xml' });
       const doc = dom.window.document;
 
-      const records = doc.querySelectorAll('record');
+      const records = doc.getElementsByTagName('recordData');
+      console.log(`📚 NDL API found ${records.length} records`);
+      
       if (records.length === 0) {
         return null;
       }
@@ -225,71 +353,198 @@ export class BookSearchService extends BaseService {
         return null;
       }
       
-      // Extract book information from XML
-      const titleEl = record.querySelector('dc\\:title, title');
-      const creatorEl = record.querySelector('dc\\:creator, creator');
-      const publisherEl = record.querySelector('dc\\:publisher, publisher');
-      const dateEl = record.querySelector('dc\\:date, date');
-      const descriptionEl = record.querySelector('dc\\:description, description');
+      // Log available elements for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 First record content:', record.innerHTML.substring(0, 500) + '...');
+        const allElements = record.getElementsByTagName('*');
+        console.log('🔍 Available elements in record:');
+        for (let i = 0; i < Math.min(allElements.length, 20); i++) {
+          const element = allElements[i];
+          if (element && element.textContent && element.textContent.trim()) {
+            console.log(`  - ${element.tagName}: "${element.textContent.substring(0, 50)}${element.textContent.length > 50 ? '...' : ''}"`);
+          }
+        }
+      }
       
-      const title = this.getTextContentFromElement(titleEl) || 'Unknown Title';
-      const creator = this.getTextContentFromElement(creatorEl) || 'Unknown Author';
-      const publisher = this.getTextContentFromElement(publisherEl);
-      const date = this.getTextContentFromElement(dateEl);
-      const description = this.getTextContentFromElement(descriptionEl);
+      // Extract book information using multiple element name variations
+      const title = this.getElementTextWithFallbacks(record, ['dcterms:title', 'dc:title']);
+      const creator = this.getElementTextWithFallbacks(record, ['dc:creator', 'dcterms:creator']);
+      const publisher = this.getElementTextWithFallbacks(record, ['dc:publisher', 'dcterms:publisher']);
+      const date = this.getElementTextWithFallbacks(record, ['dcterms:issued', 'dc:date']);
+      const description = this.getElementTextWithFallbacks(record, ['dcndl:description', 'dc:description', 'dcterms:abstract']);
+      const extent = this.getElementTextWithFallbacks(record, ['dcterms:extent', 'dc:extent']);
+      const priceInfo = this.getElementTextWithFallbacks(record, ['dcndl:price', 'dc:price']);
+      const series = this.getElementTextWithFallbacks(record, ['dcndl:series', 'dcterms:isPartOf', 'dc:relation']);
 
-      return {
+      // Clean and process title (remove furigana/reading)
+      let cleanTitle: string | null = title;
+      if (title) {
+        cleanTitle = title.split('\n')[0].trim();
+      }
+
+      console.log(`📖 NDL parsed data: title="${cleanTitle || 'null'}", author="${creator || 'null'}", publisher="${publisher || 'null'}", price="${priceInfo || 'null'}", series="${series || 'null'}"`);
+
+      // Enhanced publisher processing for Japanese publishers
+      let actualPublisher = this.processJapanesePublisher(record, publisher);
+      
+      // Extract page count from extent
+      let pageCount: number | undefined;
+      if (extent) {
+        const pageMatch = extent.match(/(\d+)p/);
+        if (pageMatch && pageMatch[1]) {
+          pageCount = parseInt(pageMatch[1], 10);
+        }
+      }
+
+      // Extract price (remove yen symbol and text)
+      let price: number | undefined;
+      if (priceInfo) {
+        const priceMatch = priceInfo.match(/(\d+)/);
+        if (priceMatch && priceMatch[1]) {
+          price = parseInt(priceMatch[1], 10);
+        }
+        console.log(`💰 Price extracted: "${priceInfo}" -> ${price}`);
+      }
+
+      // Validate required fields
+      if (!cleanTitle || cleanTitle.trim() === '' || cleanTitle === 'Unknown Title') {
+        console.log('❌ NDL API: Title is missing or unknown');
+        return null;
+      }
+
+      if (!creator || creator.trim() === '' || creator === 'Unknown Author') {
+        console.log('❌ NDL API: Author is missing or unknown');
+        return null;
+      }
+
+      const bookData: ExternalBookData = {
         isbn,
-        title: this.cleanText(title),
+        title: this.cleanText(cleanTitle),
         author: this.cleanText(creator),
-        publisher: publisher ? this.cleanText(publisher) : undefined,
-        publishedDate: date ? this.formatDate(date) : undefined,
-        description: description ? this.cleanText(description) : undefined,
-      } as ExternalBookData;
+      };
+
+      // Add optional properties only if they exist
+      if (actualPublisher) {
+        bookData.publisher = this.cleanText(actualPublisher);
+      }
+      if (date) {
+        bookData.publishedDate = this.formatDate(date);
+      }
+      if (description) {
+        bookData.description = this.cleanText(description);
+      }
+      if (pageCount !== undefined) {
+        bookData.pageCount = pageCount;
+      }
+      if (price !== undefined) {
+        bookData.price = price;
+      }
+      if (series) {
+        bookData.series = this.cleanText(series);
+      }
+
+      console.log(`✅ NDL final book data:`, bookData);
+      return bookData;
     } catch (error) {
       throw new NdlApiError('Failed to parse NDL API response', undefined, error as Error);
     }
   }
 
+  // Google Books parsing moved to GoogleBooksApiService
+
+
   /**
-   * Parses Google Books API JSON response
+   * Enhanced element text extraction with multiple fallback tag names
    */
-  private parseGoogleBooksResponse(data: any, isbn: string): ExternalBookData | null {
-    try {
-      if (!data.items || data.items.length === 0) {
-        return null;
+  private getElementTextWithFallbacks(record: Element, tagNames: string[]): string | null {
+    for (const tagName of tagNames) {
+      const elements = record.getElementsByTagName(tagName);
+      if (elements.length > 0) {
+        const element = elements[0];
+        if (element && element.textContent) {
+          const text = element.textContent.trim();
+          if (text) {
+            console.log(`✅ Found element: ${tagName} = "${text}"`);
+            return text;
+          }
+        }
       }
-
-      const item = data.items[0];
-      const volumeInfo = item.volumeInfo || {};
-      const saleInfo = item.saleInfo || {};
-
-      const authors = volumeInfo.authors;
-      const authorString = Array.isArray(authors) ? authors.join(', ') : 'Unknown Author';
-
-      return {
-        isbn,
-        title: volumeInfo.title || 'Unknown Title',
-        author: authorString,
-        publisher: volumeInfo.publisher,
-        publishedDate: volumeInfo.publishedDate,
-        description: volumeInfo.description,
-        pageCount: volumeInfo.pageCount,
-        thumbnail: volumeInfo.imageLinks?.thumbnail,
-        price: saleInfo.listPrice?.amount,
-        series: volumeInfo.series,
-      };
-    } catch (error) {
-      throw new GoogleBooksApiError('Failed to parse Google Books API response', undefined, error as Error);
     }
+    
+    console.log(`❌ Could not find any of: ${tagNames.join(', ')}`);
+    return null;
+  }
+
+  /**
+   * Advanced Japanese publisher processing
+   */
+  private processJapanesePublisher(record: Element, initialPublisher: string | null): string | null {
+    let actualPublisher = initialPublisher;
+    console.log(`🔍 Initial publisher: "${actualPublisher}"`);
+    
+    if (!actualPublisher || actualPublisher === 'JP') {
+      // Try additional publisher element candidates
+      const publisherCandidates = ['dc:publisher', 'dcndl:publisher', 'dcterms:publisher'];
+      
+      for (const candidate of publisherCandidates) {
+        const candidateValue = this.getElementTextWithFallbacks(record, [candidate]);
+        console.log(`🔍 Trying ${candidate}: "${candidateValue}"`);
+        if (candidateValue && candidateValue !== 'JP') {
+          actualPublisher = candidateValue;
+          break;
+        }
+      }
+      
+      // Search all elements for publisher-like content
+      if (!actualPublisher || actualPublisher === 'JP') {
+        console.log('🔍 Publisher not found in standard elements, checking all available elements...');
+        const allElements = record.getElementsByTagName('*');
+        for (let i = 0; i < allElements.length; i++) {
+          const element = allElements[i];
+          const content = element?.textContent;
+          
+          // Look for content that contains publisher-like keywords
+          if (content && (content.includes('書房') || content.includes('出版') || content.includes('社'))) {
+            console.log(`🎯 Found potential publisher in ${element.tagName}: "${content}"`);
+            actualPublisher = content;
+            break;
+          }
+        }
+      }
+    }
+
+    // Clean up publisher name using shared cleaning logic
+    const cleanPublisher = this.cleanJapanesePublisher(actualPublisher);
+    console.log(`🏢 Publisher cleaned: "${actualPublisher}" -> "${cleanPublisher}"`);
+    return cleanPublisher;
   }
 
 
   /**
-   * Helper method to get text content from element
+   * Shared Japanese publisher cleaning logic
    */
-  private getTextContentFromElement(element: Element | null): string | null {
-    return element ? element.textContent?.trim() || null : null;
+  private cleanJapanesePublisher(rawPublisher: string | null | undefined): string | null {
+    if (!rawPublisher) return null;
+    
+    let cleanPublisher = rawPublisher
+      .split('\n')[0]  // First line only
+      .trim()
+      .split(/\s+/)[0] // First space-separated part
+      .replace(/[ア-ン\s]+/g, '') // Remove katakana furigana and spaces
+      .replace(/東京|大阪|京都|名古屋|福岡|札幌|仙台|広島|神戸|横浜|愛知|兵庫|千葉|埼玉|神奈川/g, '') // Remove prefecture names
+      .replace(/区|市|町|村|都|府|県/g, '') // Remove administrative divisions
+      .replace(/株式会社|有限会社|合同会社|合資会社|合名会社/g, '') // Remove company types
+      .replace(/[0-9\-]/g, '') // Remove numbers and hyphens
+      .trim();
+    
+    // If cleaning resulted in empty string, use first meaningful part
+    if (!cleanPublisher && rawPublisher) {
+      const parts = rawPublisher.split(/[\s\n]+/);
+      const meaningfulPart = parts.find(part => part.length > 1 && !/^[ア-ン]+$/.test(part));
+      cleanPublisher = meaningfulPart || parts[0];
+    }
+    
+    return cleanPublisher || null;
   }
 
   /**
@@ -312,5 +567,74 @@ export class BookSearchService extends BaseService {
       return dateString; // Return original if parsing fails
     }
     return date.toISOString().split('T')[0] as string; // Return YYYY-MM-DD format
+  }
+
+  /**
+   * Cache management utilities
+   */
+  public getCacheStats(): { size: number; maxSize: number; ttlMs: number } {
+    return {
+      size: this.cache.size,
+      maxSize: this.config.cache.maxEntries,
+      ttlMs: this.config.cache.ttlMs
+    };
+  }
+
+  public clearCache(): void {
+    this.cache.clear();
+    console.log('📭 Book search cache cleared');
+  }
+
+  public cleanExpiredCacheEntries(): number {
+    const now = Date.now();
+    let removedCount = 0;
+    
+    for (const [key, entry] of this.cache.entries()) {
+      if (now - entry.timestamp > this.config.cache.ttlMs) {
+        this.cache.delete(key);
+        removedCount++;
+      }
+    }
+    
+    if (removedCount > 0) {
+      console.log(`🧹 Removed ${removedCount} expired cache entries`);
+    }
+    
+    return removedCount;
+  }
+
+  /**
+   * Circuit breaker utilities
+   */
+  public getCircuitBreakerStats(): Record<string, CircuitBreakerState> {
+    const stats: Record<string, CircuitBreakerState> = {};
+    for (const [name, state] of this.circuitBreakers.entries()) {
+      stats[name] = { ...state };
+    }
+    return stats;
+  }
+
+  public resetCircuitBreaker(apiName: string): void {
+    const breaker = this.circuitBreakers.get(apiName);
+    if (breaker) {
+      breaker.failureCount = 0;
+      breaker.state = 'CLOSED';
+      console.log(`🔄 Circuit breaker for ${apiName} has been reset`);
+    }
+  }
+
+  /**
+   * Google Books API monitoring methods
+   */
+  public getGoogleBooksHealth(): any {
+    return this.googleBooksService.getHealthStatus();
+  }
+
+  public getGoogleBooksQuotaInfo(): any {
+    return this.googleBooksService.getQuotaInfo();
+  }
+
+  public resetGoogleBooksQuota(): void {
+    this.googleBooksService.resetQuotaCounters();
   }
 }
