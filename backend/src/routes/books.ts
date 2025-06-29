@@ -38,5 +38,18 @@ export function createBookRoutes(controllers: ControllerContainer): Router {
   // DELETE /api/books/library/:isbn - Remove book from library (backward compatibility)
   router.delete('/library/:isbn', authMiddleware, validateWith(Schemas.books.removeFromLibrary), controllers.bookController.removeFromLibrary);
 
+  // Enhanced ISBN functionality
+  // POST /api/books/barcode/search - Search for books using barcode scanner input
+  router.post('/barcode/search', authMiddleware, validateWith(Schemas.books.searchByBarcode), controllers.bookController.searchByBarcode);
+
+  // POST /api/books/isbn/analyze - Analyze ISBN and return detailed information
+  router.post('/isbn/analyze', authMiddleware, validateWith(Schemas.books.analyzeISBN), controllers.bookController.analyzeISBN);
+
+  // POST /api/books/isbn/convert - Convert ISBN between formats
+  router.post('/isbn/convert', authMiddleware, validateWith(Schemas.books.convertISBN), controllers.bookController.convertISBN);
+
+  // POST /api/books/isbn/batch-validate - Validate multiple ISBNs at once
+  router.post('/isbn/batch-validate', authMiddleware, validateWith(Schemas.books.batchValidateISBN), controllers.bookController.batchValidateISBN);
+
   return router;
 }

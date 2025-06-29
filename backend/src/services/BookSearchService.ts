@@ -8,6 +8,7 @@ import axios from 'axios';
 import { JSDOM } from 'jsdom';
 import { BaseService } from './BaseService.js';
 import { GoogleBooksApiService } from './GoogleBooksApiService.js';
+import { ISBNService } from './ISBNService.js';
 import type { RepositoryContainer } from '../repositories/index.js';
 import type { ExternalBookData } from '../types/api.js';
 import {
@@ -36,11 +37,13 @@ export class BookSearchService extends BaseService {
   private readonly cache: Map<string, CacheEntry> = new Map();
   private readonly circuitBreakers: Map<string, CircuitBreakerState> = new Map();
   private readonly googleBooksService: GoogleBooksApiService;
+  private readonly isbnService: ISBNService;
 
   constructor(repositories: RepositoryContainer) {
     super(repositories);
     this.config = getApiConfiguration();
     this.googleBooksService = new GoogleBooksApiService(repositories);
+    this.isbnService = new ISBNService(repositories);
     
     // Initialize circuit breakers (only for NDL since Google Books has its own)
     this.circuitBreakers.set('ndl', {
@@ -54,10 +57,18 @@ export class BookSearchService extends BaseService {
    * Searches for book information by ISBN using multiple APIs with caching
    */
   async searchByISBN(isbn: string): Promise<ExternalBookData> {
-    // Validate ISBN format
-    this.validateISBN(isbn);
-
+    // Enhanced ISBN validation with detailed analysis
     console.log(`📚 Starting book search for ISBN: ${isbn}`);
+    
+    const isbnInfo = this.isbnService.analyzeISBN(isbn);
+    if (!isbnInfo.isValid) {
+      const primaryError = isbnInfo.errors[0];
+      throw new InvalidIsbnError(`${isbn}: ${primaryError?.message || 'Invalid ISBN format'}`);
+    }
+    
+    // Use normalized ISBN for search
+    const normalizedISBN = isbnInfo.isbn13 || isbnInfo.isbn10 || isbn;
+    console.log(`🔍 Normalized ISBN: ${normalizedISBN} (${isbnInfo.region || 'Unknown region'})`);
     
     // Check cache first
     const cached = this.getFromCache(isbn);
@@ -68,11 +79,16 @@ export class BookSearchService extends BaseService {
     
     const searchErrors: ExternalApiError[] = [];
 
-    // Try NDL API first (for Japanese books)
+    // Try NDL API first (especially for Japanese books)
+    const isJapanese = isbnInfo.region === '日本';
+    if (isJapanese) {
+      console.log('🇯🇵 Japanese ISBN detected, prioritizing NDL API');
+    }
+    
     if (this.isCircuitBreakerClosed('ndl')) {
       try {
         console.log('🔍 Trying NDL API...');
-        const bookData = await this.searchWithNDL(isbn);
+        const bookData = await this.searchWithNDL(normalizedISBN);
         if (bookData) {
           console.log('✅ Book found via NDL API:', bookData.title);
           this.recordSuccess('ndl');
@@ -92,7 +108,7 @@ export class BookSearchService extends BaseService {
     // Try Google Books API (with enhanced error handling)
     try {
       console.log('🔍 Trying Google Books API...');
-      const bookData = await this.googleBooksService.searchByISBN(isbn);
+      const bookData = await this.googleBooksService.searchByISBN(normalizedISBN);
       if (bookData) {
         console.log('✅ Book found via Google Books API:', bookData.title);
         this.putInCache(isbn, bookData);
@@ -183,65 +199,7 @@ export class BookSearchService extends BaseService {
     }
   }
 
-  /**
-   * Validates ISBN format with enhanced checksum validation
-   */
-  private validateISBN(isbn: string): void {
-    // Remove hyphens and spaces
-    const cleanISBN = isbn.replace(/[-\s]/g, '');
-    
-    // Check length
-    if (cleanISBN.length !== 10 && cleanISBN.length !== 13) {
-      throw new InvalidIsbnError(isbn);
-    }
-    
-    // Check if all characters are digits (except last character in ISBN-10 can be X)
-    if (cleanISBN.length === 10) {
-      if (!/^\d{9}[\dX]$/i.test(cleanISBN)) {
-        throw new InvalidIsbnError(isbn);
-      }
-      // Validate ISBN-10 checksum
-      if (!this.validateISBN10Checksum(cleanISBN)) {
-        throw new InvalidIsbnError(isbn);
-      }
-    } else {
-      if (!/^\d{13}$/.test(cleanISBN)) {
-        throw new InvalidIsbnError(isbn);
-      }
-      // Validate ISBN-13 checksum
-      if (!this.validateISBN13Checksum(cleanISBN)) {
-        throw new InvalidIsbnError(isbn);
-      }
-    }
-  }
-
-  private validateISBN10Checksum(isbn: string): boolean {
-    let sum = 0;
-    for (let i = 0; i < 9; i++) {
-      const char = isbn[i];
-      if (!char || !/\d/.test(char)) return false;
-      sum += parseInt(char, 10) * (10 - i);
-    }
-    const lastChar = isbn[9];
-    if (!lastChar) return false;
-    const checkDigit = lastChar === 'X' ? 10 : parseInt(lastChar, 10);
-    if (isNaN(checkDigit)) return false;
-    return (sum + checkDigit) % 11 === 0;
-  }
-
-  private validateISBN13Checksum(isbn: string): boolean {
-    let sum = 0;
-    for (let i = 0; i < 12; i++) {
-      const char = isbn[i];
-      if (!char || !/\d/.test(char)) return false;
-      const digit = parseInt(char, 10);
-      sum += i % 2 === 0 ? digit : digit * 3;
-    }
-    const lastChar = isbn[12];
-    if (!lastChar || !/\d/.test(lastChar)) return false;
-    const checkDigit = parseInt(lastChar, 10);
-    return (sum + checkDigit) % 10 === 0;
-  }
+  // ISBN validation methods moved to ISBNService
 
   /**
    * Searches using NDL (National Diet Library) API with retry logic
@@ -379,7 +337,7 @@ export class BookSearchService extends BaseService {
       // Clean and process title (remove furigana/reading)
       let cleanTitle: string | null = title;
       if (title) {
-        cleanTitle = title.split('\n')[0].trim();
+        cleanTitle = title.split('\n')[0]?.trim() || title;
       }
 
       console.log(`📖 NDL parsed data: title="${cleanTitle || 'null'}", author="${creator || 'null'}", publisher="${publisher || 'null'}", price="${priceInfo || 'null'}", series="${series || 'null'}"`);
@@ -526,10 +484,13 @@ export class BookSearchService extends BaseService {
   private cleanJapanesePublisher(rawPublisher: string | null | undefined): string | null {
     if (!rawPublisher) return null;
     
-    let cleanPublisher = rawPublisher
-      .split('\n')[0]  // First line only
-      .trim()
-      .split(/\s+/)[0] // First space-separated part
+    const firstLine = rawPublisher.split('\n')[0];
+    if (!firstLine) return null;
+    
+    const firstPart = firstLine.trim().split(/\s+/)[0];
+    if (!firstPart) return null;
+    
+    let cleanPublisher = firstPart
       .replace(/[ア-ン\s]+/g, '') // Remove katakana furigana and spaces
       .replace(/東京|大阪|京都|名古屋|福岡|札幌|仙台|広島|神戸|横浜|愛知|兵庫|千葉|埼玉|神奈川/g, '') // Remove prefecture names
       .replace(/区|市|町|村|都|府|県/g, '') // Remove administrative divisions
@@ -541,7 +502,7 @@ export class BookSearchService extends BaseService {
     if (!cleanPublisher && rawPublisher) {
       const parts = rawPublisher.split(/[\s\n]+/);
       const meaningfulPart = parts.find(part => part.length > 1 && !/^[ア-ン]+$/.test(part));
-      cleanPublisher = meaningfulPart || parts[0];
+      cleanPublisher = meaningfulPart || parts[0] || '';
     }
     
     return cleanPublisher || null;
@@ -636,5 +597,36 @@ export class BookSearchService extends BaseService {
 
   public resetGoogleBooksQuota(): void {
     this.googleBooksService.resetQuotaCounters();
+  }
+
+  /**
+   * ISBN関連のユーティリティメソッド
+   */
+  public analyzeISBN(isbn: string) {
+    return this.isbnService.analyzeISBN(isbn);
+  }
+
+  public validateISBN(isbn: string): void {
+    return this.isbnService.validateISBN(isbn);
+  }
+
+  public isJapaneseISBN(isbn: string): boolean {
+    return this.isbnService.isJapaneseISBN(isbn);
+  }
+
+  public convertToISBN13(isbn10: string): string {
+    return this.isbnService.convertToISBN13(isbn10);
+  }
+
+  public convertToISBN10(isbn13: string): string {
+    return this.isbnService.convertToISBN10(isbn13);
+  }
+
+  public extractISBNFromBarcode(barcode: string) {
+    return this.isbnService.extractISBNFromBarcode(barcode);
+  }
+
+  public debugISBN(isbn: string): void {
+    return this.isbnService.debugISBN(isbn);
   }
 }

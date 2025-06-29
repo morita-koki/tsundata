@@ -46,6 +46,28 @@ export abstract class BaseController {
   }
 
   /**
+   * Sends a not found error response
+   */
+  protected sendNotFound(res: Response, message: string = 'Resource not found'): void {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: message,
+    };
+    res.status(HttpStatusCode.NOT_FOUND).json(response);
+  }
+
+  /**
+   * Sends a bad request error response
+   */
+  protected sendBadRequest(res: Response, message: string = 'Bad request'): void {
+    const response: ApiResponse<null> = {
+      success: false,
+      error: message,
+    };
+    res.status(HttpStatusCode.BAD_REQUEST).json(response);
+  }
+
+  /**
    * Sends a paginated response
    */
   protected sendPaginated<T>(

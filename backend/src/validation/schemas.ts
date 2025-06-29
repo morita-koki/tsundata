@@ -19,10 +19,73 @@ export const PaginationQuerySchema = z.object({
   limit: z.string().optional().transform(val => val ? Math.min(100, Math.max(1, parseInt(val) || 20)) : 20),
 });
 
+// Enhanced ISBN validation schema
 export const ISBNSchema = z.string()
-  .min(10, 'ISBN must be at least 10 digits')
-  .max(17, 'ISBN must be at most 17 characters')
-  .regex(/^[\d-]+$/, 'ISBN must contain only digits and hyphens');
+  .min(1, 'ISBN is required')
+  .max(20, 'ISBN is too long')
+  .transform((val) => val.trim().replace(/[-\s]/g, '')) // Clean the ISBN
+  .refine((val) => {
+    // Basic format check
+    if (val.length !== 10 && val.length !== 13) {
+      return false;
+    }
+    
+    // Character validation
+    if (val.length === 10) {
+      return /^\d{9}[\dX]$/i.test(val);
+    } else {
+      return /^\d{13}$/.test(val);
+    }
+  }, {
+    message: 'Invalid ISBN format. Must be a valid 10 or 13 digit ISBN.',
+  })
+  .refine((val) => {
+    // Checksum validation for ISBN-10
+    if (val.length === 10) {
+      let sum = 0;
+      for (let i = 0; i < 9; i++) {
+        const char = val[i];
+        if (!char || !/\d/.test(char)) return false;
+        sum += parseInt(char, 10) * (10 - i);
+      }
+      const lastChar = val[9];
+      if (!lastChar) return false;
+      const checkDigit = lastChar.toUpperCase() === 'X' ? 10 : parseInt(lastChar, 10);
+      if (isNaN(checkDigit)) return false;
+      return (sum + checkDigit) % 11 === 0;
+    }
+    
+    // Checksum validation for ISBN-13
+    if (val.length === 13) {
+      let sum = 0;
+      for (let i = 0; i < 12; i++) {
+        const char = val[i];
+        if (!char || !/\d/.test(char)) return false;
+        const digit = parseInt(char, 10);
+        sum += i % 2 === 0 ? digit : digit * 3;
+      }
+      const lastChar = val[12];
+      if (!lastChar || !/\d/.test(lastChar)) return false;
+      const checkDigit = parseInt(lastChar, 10);
+      return (sum + checkDigit) % 10 === 0;
+    }
+    
+    return false;
+  }, {
+    message: 'Invalid ISBN checksum. Please verify the ISBN is correct.',
+  });
+
+// Barcode schema for barcode scanner input
+export const BarcodeSchema = z.string()
+  .min(13, 'Barcode must be at least 13 digits')
+  .max(13, 'Barcode must be exactly 13 digits')
+  .regex(/^\d{13}$/, 'Barcode must contain only digits')
+  .refine((val) => {
+    // Must start with 978 or 979 for ISBN barcodes
+    return val.startsWith('978') || val.startsWith('979');
+  }, {
+    message: 'Barcode must be a valid ISBN barcode (starting with 978 or 979)',
+  });
 
 // Authentication schemas
 export const AuthProfileUpdateSchema = z.object({
@@ -33,6 +96,24 @@ export const AuthProfileUpdateSchema = z.object({
 // Book schemas
 export const BookAddToLibrarySchema = z.object({
   isbn: ISBNSchema,
+});
+
+// Enhanced book schemas with barcode support
+export const BookBarcodeSearchSchema = z.object({
+  barcode: BarcodeSchema,
+});
+
+export const ISBNAnalysisSchema = z.object({
+  isbn: z.string().min(1, 'ISBN is required'), // Less strict for analysis
+});
+
+export const ISBNConversionSchema = z.object({
+  isbn: ISBNSchema,
+  targetFormat: z.enum(['ISBN-10', 'ISBN-13']).optional(),
+});
+
+export const ISBNBatchValidationSchema = z.object({
+  isbns: z.array(z.string().min(1)).min(1, 'At least one ISBN is required').max(100, 'Maximum 100 ISBNs allowed'),
 });
 
 export const BookReadingStatusSchema = z.object({
@@ -136,6 +217,19 @@ export const Schemas = {
     },
     getById: {
       params: IdParamSchema,
+    },
+    // Enhanced ISBN functionality
+    searchByBarcode: {
+      body: BookBarcodeSearchSchema,
+    },
+    analyzeISBN: {
+      body: ISBNAnalysisSchema,
+    },
+    convertISBN: {
+      body: ISBNConversionSchema,
+    },
+    batchValidateISBN: {
+      body: ISBNBatchValidationSchema,
     },
   },
 

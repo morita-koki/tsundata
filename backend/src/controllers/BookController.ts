@@ -133,4 +133,125 @@ export class BookController extends BaseController {
     
     this.sendSuccess(res, book);
   });
+
+  /**
+   * POST /api/books/barcode/search
+   * Searches for a book using barcode scanner input
+   */
+  searchByBarcode = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const { barcode } = (req as any).validatedBody as { barcode: string };
+    
+    // Extract ISBN from barcode
+    const isbnInfo = this.services.isbnService.extractISBNFromBarcode(barcode);
+    
+    if (!isbnInfo || !isbnInfo.isValid) {
+      this.sendNotFound(res, 'Invalid barcode or not an ISBN barcode');
+      return;
+    }
+    
+    // Search for the book using the extracted ISBN
+    const book = await this.services.bookService.searchBookByISBN(isbnInfo.isbn13 || isbnInfo.isbn10!);
+    
+    this.sendSuccess(res, {
+      book,
+      isbnInfo: {
+        original: barcode,
+        extractedISBN: isbnInfo.isbn13 || isbnInfo.isbn10,
+        format: isbnInfo.format,
+        region: isbnInfo.region,
+        language: isbnInfo.language
+      }
+    });
+  });
+
+  /**
+   * POST /api/books/isbn/analyze
+   * Analyzes ISBN and returns detailed information
+   */
+  analyzeISBN = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const { isbn } = (req as any).validatedBody as { isbn: string };
+    
+    const analysis = this.services.isbnService.analyzeISBN(isbn);
+    
+    this.sendSuccess(res, analysis);
+  });
+
+  /**
+   * POST /api/books/isbn/convert
+   * Converts ISBN between formats
+   */
+  convertISBN = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const { isbn, targetFormat } = (req as any).validatedBody as { isbn: string; targetFormat?: 'ISBN-10' | 'ISBN-13' };
+    
+    const analysis = this.services.isbnService.analyzeISBN(isbn);
+    
+    if (!analysis.isValid) {
+      this.sendBadRequest(res, 'Invalid ISBN provided');
+      return;
+    }
+    
+    let converted: string | null = null;
+    
+    if (!targetFormat) {
+      // Auto-convert to the opposite format
+      if (analysis.format === 'ISBN-10' && analysis.isbn13) {
+        converted = analysis.isbn13;
+      } else if (analysis.format === 'ISBN-13' && analysis.isbn10) {
+        converted = analysis.isbn10;
+      }
+    } else if (targetFormat === 'ISBN-13') {
+      converted = analysis.isbn13;
+    } else if (targetFormat === 'ISBN-10') {
+      converted = analysis.isbn10;
+    }
+    
+    if (!converted) {
+      this.sendBadRequest(res, `Cannot convert to ${targetFormat || 'target format'}`);
+      return;
+    }
+    
+    this.sendSuccess(res, {
+      original: {
+        isbn: analysis.original,
+        format: analysis.format
+      },
+      converted: {
+        isbn: converted,
+        format: targetFormat || (converted.length === 10 ? 'ISBN-10' : 'ISBN-13')
+      },
+      region: analysis.region,
+      language: analysis.language
+    });
+  });
+
+  /**
+   * POST /api/books/isbn/batch-validate
+   * Validates multiple ISBNs at once
+   */
+  batchValidateISBN = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const { isbns } = (req as any).validatedBody as { isbns: string[] };
+    
+    const results = await this.services.isbnService.validateISBNBatch(isbns);
+    
+    const detailedResults = isbns.map(isbn => {
+      const analysis = this.services.isbnService.analyzeISBN(isbn);
+      return {
+        isbn: isbn,
+        isValid: analysis.isValid,
+        format: analysis.isValid ? analysis.format : null,
+        region: analysis.region,
+        errors: analysis.errors
+      };
+    });
+    
+    this.sendSuccess(res, {
+      summary: {
+        total: isbns.length,
+        valid: results.valid.length,
+        invalid: results.invalid.length,
+        validPercentage: Math.round((results.valid.length / isbns.length) * 100)
+      },
+      results: detailedResults
+    });
+  });
 }
