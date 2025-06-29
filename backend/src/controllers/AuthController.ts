@@ -8,6 +8,7 @@ import { BaseController } from './BaseController.js';
 import type { ServiceContainer } from '../services/index.js';
 import type { AuthRequest } from '../types/auth.js';
 import type { AuthSyncResponse } from '../types/api.js';
+import type { AuthProfileUpdateData } from '../validation/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 export class AuthController extends BaseController {
@@ -72,16 +73,15 @@ export class AuthController extends BaseController {
    */
   updateProfile = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
     const userId = this.getUserId(req);
-    this.validateRequestBody(req.body);
+    const updateData = (req as any).validatedBody as AuthProfileUpdateData;
 
-    const { username, email } = req.body as { username?: string; email?: string; };
-    const updates: any = {};
-
-    if (username !== undefined) {
-      updates.username = username;
+    // Build update object with only provided fields
+    const updates: Record<string, string> = {};
+    if (updateData.username !== undefined) {
+      updates.username = updateData.username;
     }
-    if (email !== undefined) {
-      updates.email = email;
+    if (updateData.email !== undefined) {
+      updates.email = updateData.email;
     }
 
     const updatedUser = await this.services.userService.updateUser(userId, updates, userId);

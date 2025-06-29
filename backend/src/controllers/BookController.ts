@@ -7,6 +7,12 @@ import type { Response, NextFunction } from 'express';
 import { BaseController } from './BaseController.js';
 import type { ServiceContainer } from '../services/index.js';
 import type { AuthRequest } from '../types/auth.js';
+import type { 
+  BookAddToLibraryData,
+  BookReadingStatusData,
+  BookLibraryQuery,
+  BookSearchQuery
+} from '../validation/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 export class BookController extends BaseController {
@@ -19,7 +25,7 @@ export class BookController extends BaseController {
    * Searches for a book by ISBN
    */
   searchByISBN = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
-    const isbn = this.getStringParam(req, 'isbn');
+    const { isbn } = (req as any).validatedParams as { isbn: string };
     
     const book = await this.services.bookService.searchBookByISBN(isbn);
     
@@ -32,10 +38,7 @@ export class BookController extends BaseController {
    */
   addToLibrary = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
     const userId = this.getUserId(req);
-    this.validateRequestBody(req.body);
-    this.validateRequiredFields(req.body, ['isbn']);
-
-    const { isbn } = req.body as { isbn: string; };
+    const { isbn } = (req as any).validatedBody as BookAddToLibraryData;
     
     const result = await this.services.bookService.addBookToLibrary(isbn, userId);
     
@@ -48,7 +51,7 @@ export class BookController extends BaseController {
    */
   removeFromLibrary = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
     const userId = this.getUserId(req);
-    const isbn = this.getStringParam(req, 'isbn');
+    const { isbn } = (req as any).validatedParams as { isbn: string };
     
     await this.services.bookService.removeBookFromLibrary(isbn, userId);
     
@@ -61,11 +64,7 @@ export class BookController extends BaseController {
    */
   getLibrary = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
     const userId = this.getUserId(req);
-    const { page, limit } = this.getPaginationParams(req);
-    
-    const isRead = this.getOptionalBooleanQuery(req, 'isRead');
-    const sortBy = this.getOptionalStringQuery(req, 'sortBy') as 'addedAt' | 'readAt' | 'title' | undefined;
-    const sortOrder = this.getOptionalStringQuery(req, 'sortOrder') as 'asc' | 'desc' | undefined;
+    const { page, limit, isRead, sortBy, sortOrder } = (req as any).validatedQuery as BookLibraryQuery;
 
     const options: Parameters<typeof this.services.bookService.getUserLibrary>[1] = {
       page,
@@ -86,11 +85,8 @@ export class BookController extends BaseController {
    */
   updateReadingStatus = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
     const userId = this.getUserId(req);
-    const userBookId = this.getIdParam(req, 'userBookId');
-    this.validateRequestBody(req.body);
-    this.validateRequiredFields(req.body, ['isRead']);
-
-    const { isRead } = req.body as { isRead: boolean; };
+    const { userBookId } = (req as any).validatedParams as { userBookId: number };
+    const { isRead } = (req as any).validatedBody as BookReadingStatusData;
     
     const updatedUserBook = await this.services.bookService.updateReadingStatus(
       userBookId,
@@ -107,7 +103,7 @@ export class BookController extends BaseController {
    */
   getUserBook = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
     const userId = this.getUserId(req);
-    const userBookId = this.getIdParam(req, 'userBookId');
+    const { userBookId } = (req as any).validatedParams as { userBookId: number };
     
     const userBook = await this.services.bookService.getUserBook(userBookId, userId);
     
@@ -119,12 +115,7 @@ export class BookController extends BaseController {
    * Searches books in the database
    */
   searchBooks = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
-    const query = this.getOptionalStringQuery(req, 'q');
-    if (!query) {
-      throw new Error('Search query parameter "q" is required');
-    }
-
-    const { page, limit } = this.getPaginationParams(req);
+    const { q: query, page, limit } = (req as any).validatedQuery as BookSearchQuery;
     
     const result = await this.services.bookService.searchBooks(query, { page, limit });
     
@@ -136,7 +127,7 @@ export class BookController extends BaseController {
    * Gets a book by ID
    */
   getBookById = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
-    const bookId = this.getIdParam(req, 'id');
+    const { id: bookId } = (req as any).validatedParams as { id: number };
     
     const book = await this.services.bookService.getBookById(bookId);
     
