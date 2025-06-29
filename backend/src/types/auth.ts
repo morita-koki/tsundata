@@ -44,7 +44,9 @@ export interface JwtPayload {
 }
 
 // Authentication middleware types
-export interface AuthRequest extends Express.Request {
+import type { Request } from 'express';
+
+export interface AuthRequest extends Request {
   user?: AuthenticatedUser;
   firebaseToken?: FirebaseTokenPayload;
 }

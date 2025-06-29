@@ -251,3 +251,6 @@ declare global {
     }
   }
 }
+
+// Default export alias for backward compatibility
+export const authMiddleware = authenticateToken;

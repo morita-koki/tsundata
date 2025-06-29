@@ -29,7 +29,7 @@ export interface AuthSyncResponse {
   firebaseUser: {
     uid: string;
     email: string;
-    name?: string;
+    name?: string | undefined;
   };
 }
 
