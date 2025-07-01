@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { bookshelfApi, bookApi, type Bookshelf, type UserBook } from '@/lib/api';
+import { bookshelfApi, bookApi, userApi, type Bookshelf, type BookshelfDetailResponse, type UserBook } from '@/lib/api';
+import { auth } from '@/lib/firebase';
 import { useInitialMinimumLoading } from './useMinimumLoading';
 import { useToast } from './useToast';
 import { useErrorHandler } from './useErrorHandler';
@@ -9,7 +10,7 @@ import { SUCCESS_MESSAGES, ERROR_MESSAGES } from '@/constants/messages';
 import type { LoadingState } from '@/types/common';
 
 interface BookshelfDetailState extends LoadingState {
-  bookshelf: Bookshelf | null;
+  bookshelf: BookshelfDetailResponse | null;
   userBooks: UserBook[];
   isOwner: boolean;
   isEditMode: boolean;
@@ -50,21 +51,34 @@ export function useBookshelfDetail(bookshelfId: number): UseBookshelfDetailRetur
     try {
       setDetailState(prev => ({ ...prev, isLoading: true, error: null }));
       
-      const bookshelfData = await bookshelfApi.getById(bookshelfId);
-      
-      const token = localStorage.getItem('token');
-      const userData = localStorage.getItem('user');
+      const bookshelfData = await bookshelfApi.getWithBooks(bookshelfId);
       
       let userBooks: UserBook[] = [];
       let isOwner = false;
       
-      if (token && userData) {
-        const user = JSON.parse(userData);
-        isOwner = bookshelfData.user?.id === user.id;
-        
-        // オーナーの場合のみライブラリデータを取得
-        if (isOwner) {
-          userBooks = await bookApi.getLibrary();
+      // Firebase認証からユーザー情報を取得
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        // APIから現在のユーザー情報を取得して所有者判定
+        try {
+          const currentUserData = await userApi.getMe();
+          isOwner = currentUserData.id === bookshelfData.user.id;
+          
+          console.log('🔍 Owner check (API):', {
+            currentUserId: currentUserData.id,
+            currentUserEmail: currentUserData.email,
+            bookshelfUserId: bookshelfData.user.id,
+            bookshelfUserEmail: bookshelfData.user.email,
+            isOwner: isOwner
+          });
+          
+          // ライブラリデータを取得（所有者の場合のみ）
+          if (isOwner) {
+            userBooks = await bookApi.getLibrary();
+          }
+        } catch (error) {
+          console.error('Failed to get current user:', error);
+          isOwner = false;
         }
       }
       
@@ -119,7 +133,13 @@ export function useBookshelfDetail(bookshelfId: number): UseBookshelfDetailRetur
       await loadBookshelf();
       showSuccess(SUCCESS_MESSAGES.BOOK_ADDED_TO_BOOKSHELF);
     } catch (error: any) {
-      handleApiError(error, ERROR_MESSAGES.BOOK_ADD_TO_BOOKSHELF_FAILED);
+      // Handle specific error cases
+      if (error.response?.status === 500) {
+        // Likely a duplicate book error
+        handleApiError(error, 'この本は既に本棚に追加されています');
+      } else {
+        handleApiError(error, ERROR_MESSAGES.BOOK_ADD_TO_BOOKSHELF_FAILED);
+      }
       throw error;
     }
   }, [bookshelfId, loadBookshelf, showSuccess, handleApiError]);

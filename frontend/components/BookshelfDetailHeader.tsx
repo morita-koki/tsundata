@@ -1,9 +1,9 @@
 'use client';
 
-import type { Bookshelf } from '@/lib/api';
+import type { BookshelfDetailResponse } from '@/lib/api';
 
 interface BookshelfDetailHeaderProps {
-  bookshelf: Bookshelf;
+  bookshelf: BookshelfDetailResponse;
   isOwner: boolean;
   onEdit: () => void;
 }
@@ -22,7 +22,7 @@ export default function BookshelfDetailHeader({
         )}
         <div className="flex justify-between items-center">
           <div>
-            <span className="text-sm text-gray-500">作成者: {bookshelf.user?.username}</span>
+            <span className="text-sm text-gray-500">作成者: {bookshelf.user.username}</span>
             <span className={`ml-4 px-2 py-1 rounded text-xs ${
               bookshelf.isPublic ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
             }`}>

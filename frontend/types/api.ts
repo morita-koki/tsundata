@@ -45,11 +45,27 @@ export interface Bookshelf {
   description: string;
   isPublic: boolean;
   createdAt: string;
+  bookCount?: number;
   user?: {
     id: number;
     username: string;
   };
   books?: BookshelfBook[];
+}
+
+export interface BookshelfDetailResponse extends Bookshelf {
+  books: Array<{
+    id: number;
+    userBookId: number;
+    addedAt: string;
+    displayOrder: number;
+    book: Book;
+    isRead: boolean;
+  }>;
+  user: {
+    id: number;
+    username: string;
+  };
 }
 
 export interface Stats {
