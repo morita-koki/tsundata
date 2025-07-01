@@ -3,7 +3,7 @@
  * Handles all bookshelf-related database operations
  */
 
-import { eq, and, desc, asc, like, count } from 'drizzle-orm';
+import { eq, and, desc, asc, like, count, sql } from 'drizzle-orm';
 import { bookshelves, bookshelfBooks, userBooks, books } from '../models/index.js';
 import { BaseRepository, type Database } from './BaseRepository.js';
 import type { 
@@ -103,7 +103,7 @@ export class BookshelfRepository extends BaseRepository {
       const direction = sortOrder === 'asc' ? asc : desc;
       const orderBy = sortBy === 'name' ? direction(bookshelves.name) : direction(bookshelves.createdAt);
 
-      // Get bookshelves
+      // Get bookshelves first
       const bookshelfResults = await this.db
         .select()
         .from(bookshelves)
@@ -112,6 +112,23 @@ export class BookshelfRepository extends BaseRepository {
         .offset(offset)
         .orderBy(orderBy);
 
+      // Get book counts for each bookshelf
+      const bookshelfIds = bookshelfResults.map(bs => bs.id);
+      const bookCounts = await this.db
+        .select({
+          bookshelfId: bookshelfBooks.bookshelfId,
+          count: count(bookshelfBooks.userBookId)
+        })
+        .from(bookshelfBooks)
+        .where(bookshelfIds.length > 0 ? sql`${bookshelfBooks.bookshelfId} IN (${sql.join(bookshelfIds, sql`, `)})` : sql`1=0`)
+        .groupBy(bookshelfBooks.bookshelfId);
+
+      // Combine results with book counts
+      const resultsWithCounts = bookshelfResults.map(bookshelf => ({
+        ...bookshelf,
+        bookCount: bookCounts.find(bc => bc.bookshelfId === bookshelf.id)?.count || 0
+      }));
+
       // Get total count
       const totalResult = await this.db
         .select({ count: count() })
@@ -119,7 +136,7 @@ export class BookshelfRepository extends BaseRepository {
         .where(and(...whereConditions));
 
       return {
-        bookshelves: bookshelfResults as Bookshelf[],
+        bookshelves: resultsWithCounts as Bookshelf[],
         total: totalResult[0]?.count || 0,
       };
     }, 'get user bookshelves');

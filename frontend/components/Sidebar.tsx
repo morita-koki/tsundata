@@ -16,8 +16,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newBookshelfName, setNewBookshelfName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const loadBookshelves = useCallback(async () => {
     try {
@@ -45,18 +50,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const handleBookshelfClick = (bookshelfId: number) => {
     router.push(`/bookshelves/${bookshelfId}`);
-    // Only close on mobile
-    if (window.innerWidth < 1024) {
-      onClose();
-    }
+    onClose();
   };
 
   const handleHomeClick = () => {
     router.push('/');
-    // Only close on mobile
-    if (window.innerWidth < 1024) {
-      onClose();
-    }
+    onClose();
   };
 
   const isActive = (path: string) => {
@@ -92,10 +91,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       // Navigate to the new bookshelf
       router.push(`/bookshelves/${newBookshelf.id}`);
       
-      // Close sidebar on mobile
-      if (window.innerWidth < 1024) {
-        onClose();
-      }
+      // Close sidebar
+      onClose();
     } catch (error) {
       console.error('Failed to create bookshelf:', error);
       alert('本棚の作成に失敗しました');
@@ -133,7 +130,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   return (
     <>
       {/* Overlay */}
-      {isOpen && (
+      {isMounted && isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={onClose}
@@ -142,8 +139,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-16 left-0 h-full w-80 bg-white border-r border-gray-200 border-t border-gray-300 transform transition-transform duration-300 ease-in-out z-50 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed top-16 left-0 h-full w-80 bg-white border-r border-gray-200 border-t border-gray-300 transform transition-transform duration-300 ease-in-out z-50 lg:translate-x-0 ${
+          isMounted && isOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:flex-shrink-0`}
       >
         <div className="flex flex-col h-full">
@@ -189,7 +186,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     </div>
                   ))}
                 </div>
-              ) : bookshelves.length === 0 ? (
+              ) : !Array.isArray(bookshelves) || bookshelves.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-gray-500">本棚がありません</div>
               ) : (
                 <div className="space-y-1">
@@ -206,7 +203,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium truncate">{bookshelf.name}</div>
                         <div className="text-xs text-gray-500 truncate">
-                          {bookshelf.books?.length || 0}冊
+                          {bookshelf.bookCount ?? bookshelf.books?.length ?? 0}冊
                         </div>
                       </div>
                       
@@ -249,7 +246,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           {/* Footer */}
           <div className="p-3 border-t border-gray-200">
             <div className="text-xs text-gray-500 text-center">
-              総書籍数: {bookshelves.reduce((sum, shelf) => sum + (shelf.books?.length || 0), 0)}冊
+              総書籍数: {Array.isArray(bookshelves) ? bookshelves.reduce((sum, shelf) => sum + (shelf.books?.length || 0), 0) : 0}冊
             </div>
           </div>
         </div>

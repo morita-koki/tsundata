@@ -8,6 +8,7 @@ import { BaseController } from './BaseController.js';
 import type { ServiceContainer } from '../services/index.js';
 import type { AuthRequest } from '../types/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { InvalidFormatError } from '../errors/index.js';
 
 export class UserController extends BaseController {
   constructor(services: ServiceContainer) {
@@ -36,6 +37,17 @@ export class UserController extends BaseController {
    * Gets user details by ID
    */
   getUserById = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const idParam = req.params.id;
+    
+    // Special validation for common endpoint confusion
+    if (idParam === 'stats') {
+      throw new InvalidFormatError(
+        'id',
+        'positive integer. Did you mean /api/users/me/stats for your own statistics?',
+        idParam
+      );
+    }
+    
     const userId = this.getIdParam(req, 'id');
     
     const user = await this.services.userService.getUserById(userId);
@@ -54,6 +66,17 @@ export class UserController extends BaseController {
    * Gets user statistics
    */
   getUserStats = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const idParam = req.params.id;
+    
+    // Special validation for common endpoint confusion
+    if (idParam === 'stats') {
+      throw new InvalidFormatError(
+        'id',
+        'positive integer. Did you mean /api/users/me/stats for your own statistics?',
+        idParam
+      );
+    }
+    
     const userId = this.getIdParam(req, 'id');
     
     const stats = await this.services.userService.getUserStats(userId);
@@ -129,6 +152,23 @@ export class UserController extends BaseController {
       isFollowing,
       isBlocked,
       isBlockedBy,
+    });
+  });
+
+  /**
+   * GET /api/users/me
+   * Gets current user details
+   */
+  getCurrentUser = asyncHandler(async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const userId = this.getUserId(req);
+    
+    const user = await this.services.userService.getUserById(userId);
+    
+    this.sendSuccess(res, {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      createdAt: user.createdAt,
     });
   });
 
