@@ -1,10 +1,10 @@
 'use client';
 
-import type { Bookshelf } from '@/lib/api';
+import type { BookshelfDetailResponse } from '@/lib/api';
 
 interface BookshelfDetailEditModalProps {
   isOpen: boolean;
-  bookshelf: Bookshelf | null;
+  bookshelf: BookshelfDetailResponse | null;
   onClose: () => void;
   onSave: (name: string, description: string, isPublic: boolean) => void;
   onEnterEditMode: () => void;

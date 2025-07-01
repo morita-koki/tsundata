@@ -3,8 +3,8 @@
  * Handles all user-related database operations
  */
 
-import { eq, and, asc, like, count } from 'drizzle-orm';
-import { users, follows, blocks } from '../models/index.js';
+import { eq, and, asc, like, count, sql } from 'drizzle-orm';
+import { users, follows, blocks, userBooks, books } from '../models/index.js';
 import { BaseRepository, type Database } from './BaseRepository.js';
 import type { 
   User, 
@@ -286,26 +286,50 @@ export class UserRepository extends BaseRepository {
   /**
    * Gets user statistics
    */
-  async getUserStats(_userId: number): Promise<{
+  async getUserStats(userId: number): Promise<{
     totalBooks: number;
     readBooks: number;
     unreadBooks: number;
-    totalBookshelves: number;
-    publicBookshelves: number;
-    followers: number;
-    following: number;
+    totalValue: number;
+    unreadValue: number;
   }> {
     return this.executeOperation(async () => {
-      // This would need to be implemented with joins to other tables
-      // For now, returning placeholder structure
-      return {
+      // First check if user has any books
+      const userBookCount = await this.db.select({
+        count: sql<number>`COUNT(*)`
+      })
+      .from(userBooks)
+      .where(eq(userBooks.userId, userId));
+
+      // If user has no books, return zeros immediately
+      if (userBookCount[0].count === 0) {
+        return {
+          totalBooks: 0,
+          readBooks: 0,
+          unreadBooks: 0,
+          totalValue: 0,
+          unreadValue: 0,
+        };
+      }
+
+      // Get book statistics with price calculations
+      const stats = await this.db.select({
+        totalBooks: sql<number>`COUNT(*)`,
+        readBooks: sql<number>`SUM(CASE WHEN ${userBooks.isRead} = 1 THEN 1 ELSE 0 END)`,
+        unreadBooks: sql<number>`SUM(CASE WHEN ${userBooks.isRead} = 0 THEN 1 ELSE 0 END)`,
+        totalValue: sql<number>`COALESCE(SUM(CASE WHEN ${books.price} IS NOT NULL THEN ${books.price} ELSE 0 END), 0)`,
+        unreadValue: sql<number>`COALESCE(SUM(CASE WHEN ${userBooks.isRead} = 0 AND ${books.price} IS NOT NULL THEN ${books.price} ELSE 0 END), 0)`
+      })
+      .from(userBooks)
+      .innerJoin(books, eq(userBooks.bookId, books.id))
+      .where(eq(userBooks.userId, userId));
+
+      return stats[0] || {
         totalBooks: 0,
         readBooks: 0,
         unreadBooks: 0,
-        totalBookshelves: 0,
-        publicBookshelves: 0,
-        followers: 0,
-        following: 0,
+        totalValue: 0,
+        unreadValue: 0,
       };
     }, 'get user stats');
   }

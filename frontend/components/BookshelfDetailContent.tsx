@@ -1,10 +1,10 @@
 'use client';
 
 import BookList from './BookList';
-import type { Bookshelf } from '@/lib/api';
+import type { BookshelfDetailResponse } from '@/lib/api';
 
 interface BookshelfDetailContentProps {
-  bookshelf: Bookshelf;
+  bookshelf: BookshelfDetailResponse;
   isOwner: boolean;
   isEditMode: boolean;
   onRemoveBook: (userBookId: number, title: string) => void;

@@ -82,8 +82,8 @@ export function useBookScanner(options: UseBookScannerOptions = {}): UseBookScan
       const book = await bookApi.searchByISBN(isbn);
       console.log(`📖 Book found:`, book);
         
-      console.log(`➕ Adding book to library - Book ID: ${book.id}`);
-      const userBook = await bookApi.addToLibrary(book.id);
+      console.log(`➕ Adding book to library - ISBN: ${isbn}`);
+      const userBook = await bookApi.addToLibrary(isbn);
       console.log(`✅ Book added to library:`, userBook);
       
       // 成功メッセージを表示

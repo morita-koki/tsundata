@@ -16,6 +16,9 @@ export function createUserRoutes(controllers: ControllerContainer): Router {
   // GET /api/users/search - Search for users
   router.get('/search', authMiddleware, controllers.userController.searchUsers);
 
+  // GET /api/users/me - Get current user details
+  router.get('/me', authMiddleware, controllers.userController.getCurrentUser);
+
   // GET /api/users/me/stats - Get current user statistics
   router.get('/me/stats', authMiddleware, controllers.userController.getCurrentUserStats);
 

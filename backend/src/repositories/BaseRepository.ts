@@ -80,6 +80,14 @@ export abstract class BaseRepository {
     try {
       return await Promise.resolve(operation());
     } catch (error) {
+      // Log the original error for debugging
+      console.error(`❌ Original error in ${operationName}:`, error);
+      
+      // If it's already a custom application error, don't wrap it
+      if ((error as any).isOperational === true) {
+        throw error;
+      }
+      
       this.handleDatabaseError(error as Error, operationName);
     }
   }

@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import Navigation from '@/components/Navigation';
-import Sidebar from '@/components/Sidebar';
-import LoadingPage from '@/components/LoadingPage';
-import { useSidebar } from '@/contexts/SidebarContext';
-import { usePageTitle } from '@/contexts/PageContext';
-import { useMinimumLoading } from '@/hooks/useMinimumLoading';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import Navigation from "@/components/Navigation";
+import Sidebar from "@/components/Sidebar";
+import LoadingPage from "@/components/LoadingPage";
+import { useSidebar } from "@/contexts/SidebarContext";
+import { usePageTitle } from "@/contexts/PageContext";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
 export default function DashboardLayout({
   children,
@@ -28,14 +28,14 @@ export default function DashboardLayout({
           try {
             // Get fresh token and store it
             const token = await firebaseUser.getIdToken();
-            localStorage.setItem('token', token);
+            localStorage.setItem("token", token);
           } catch (error) {
-            console.error('Auth state change error:', error);
-            router.push('/login');
+            console.error("Auth state change error:", error);
+            router.push("/login");
           }
         });
       } else {
-        router.push('/login');
+        router.push("/login");
       }
     });
 
@@ -48,20 +48,12 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-white">
-      <Navigation 
-        title={pageTitle} 
-        onMenuClick={toggleSidebar} 
-      />
-      
-      <div className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'lg:pl-80' : 'lg:pl-0'}`}>
-        <Sidebar 
-          isOpen={isSidebarOpen} 
-          onClose={() => setSidebarOpen(false)} 
-        />
-        
-        <div className="p-6">
-          {children}
-        </div>
+      <Navigation title={pageTitle} onMenuClick={toggleSidebar} />
+
+      <div className="pt-16 transition-all duration-300 lg:pl-80">
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+        <div className="p-6">{children}</div>
       </div>
     </div>
   );

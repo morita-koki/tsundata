@@ -8,6 +8,7 @@ import type { ServiceContainer } from '../services/index.js';
 import type { AuthRequest } from '../types/auth.js';
 import type { ApiResponse, PaginatedResponse } from '../types/api.js';
 import { HttpStatusCode } from '../types/common.js';
+import { ValidationError, InvalidFormatError, RequiredFieldError } from '../errors/index.js';
 
 export abstract class BaseController {
   protected services: ServiceContainer;
@@ -129,12 +130,12 @@ export abstract class BaseController {
   protected getIdParam(req: AuthRequest, paramName: string = 'id'): number {
     const idString = req.params[paramName];
     if (!idString) {
-      throw new Error(`Missing ${paramName} parameter`);
+      throw new RequiredFieldError(paramName);
     }
     const id = parseInt(idString, 10);
     
     if (isNaN(id) || id <= 0) {
-      throw new Error(`Invalid ${paramName}: must be a positive integer`);
+      throw new InvalidFormatError(paramName, 'positive integer', idString);
     }
     
     return id;
@@ -146,7 +147,7 @@ export abstract class BaseController {
   protected getStringParam(req: AuthRequest, paramName: string): string {
     const value = req.params[paramName];
     if (!value || typeof value !== 'string') {
-      throw new Error(`Missing or invalid ${paramName} parameter`);
+      throw new RequiredFieldError(paramName);
     }
     return value;
   }

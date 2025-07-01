@@ -127,15 +127,18 @@ export default function BookshelfDetailPage() {
       />
       
       {/* Floating Action Button */}
-      {isOwner && (
-        <button
-          onClick={openAddBookModal}
-          className="fixed bottom-6 right-6 w-16 h-16 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 z-40 flex items-center justify-center hover:scale-110"
-          title="本を追加"
-        >
-          <span className="text-2xl">📚</span>
-        </button>
-      )}
+      {(() => {
+        console.log('📱 FAB render check:', { isOwner, bookshelf: bookshelf?.name });
+        return isOwner && (
+          <button
+            onClick={openAddBookModal}
+            className="fixed bottom-6 right-6 w-16 h-16 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 z-40 flex items-center justify-center hover:scale-110"
+            title="本を追加"
+          >
+            <span className="text-2xl">📚</span>
+          </button>
+        );
+      })()}
 
       {/* Toast notifications */}
       {toasts.map((toast) => (

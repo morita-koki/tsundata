@@ -71,7 +71,8 @@ export async function initializeDatabase() {
         added_at INTEGER NOT NULL,
         display_order INTEGER DEFAULT 0,
         FOREIGN KEY (bookshelf_id) REFERENCES bookshelves (id) ON DELETE CASCADE,
-        FOREIGN KEY (user_book_id) REFERENCES user_books (id) ON DELETE CASCADE
+        FOREIGN KEY (user_book_id) REFERENCES user_books (id) ON DELETE CASCADE,
+        UNIQUE(bookshelf_id, user_book_id)
       );
 
       CREATE TABLE IF NOT EXISTS follows (
