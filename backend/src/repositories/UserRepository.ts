@@ -36,6 +36,8 @@ export class UserRepository extends BaseRepository {
           firebaseUid: users.firebaseUid,
           username: users.username,
           email: users.email,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
         });
 
       this.validateRecordsExist(result, 'User');
