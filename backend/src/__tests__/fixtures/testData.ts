@@ -7,6 +7,78 @@ import type { User, Book, UserBook, Bookshelf } from '../../types/database.js';
 import type { ExternalBookData } from '../../types/api.js';
 
 /**
+ * 新しいテスト構造 - リポジトリテスト用
+ */
+export const TEST_USERS = {
+  USER1: {
+    firebaseUid: 'test-firebase-uid-alice',
+    email: 'alice@example.com',
+    username: 'alice_user',
+  },
+  USER2: {
+    firebaseUid: 'test-firebase-uid-bob',
+    email: 'bob@example.com',
+    username: 'bob_user',
+  },
+  USER3: {
+    firebaseUid: 'test-firebase-uid-charlie',
+    email: 'charlie@example.com',
+    username: 'charlie_user',
+  },
+};
+
+export const TEST_BOOKS = {
+  BOOK1: {
+    isbn: '9784797382570',
+    title: 'JavaScript完全ガイド',
+    author: 'David Flanagan',
+    publisher: 'オライリー・ジャパン',
+    publishedDate: '2021-01-01',
+    description: 'JavaScript言語の完全なリファレンス',
+    thumbnail: 'https://example.com/js-guide.jpg',
+    price: 4950,
+  },
+  BOOK2: {
+    isbn: '9784048930598',
+    title: 'TypeScriptプログラミング',
+    author: '鈴木一郎',
+    publisher: 'KADOKAWA',
+    publishedDate: '2023-01-01',
+    description: 'TypeScriptの基礎から応用まで',
+    thumbnail: 'https://example.com/ts-programming.jpg',
+    price: 3300,
+  },
+  BOOK3: {
+    isbn: '9784873119038',
+    title: 'データベース設計入門',
+    author: '田中花子',
+    publisher: 'オライリー・ジャパン',
+    publishedDate: '2020-01-01',
+    description: 'データベース設計の基本から応用まで',
+    thumbnail: 'https://example.com/db-design.jpg',
+    price: 3850,
+  },
+};
+
+export const TEST_BOOKSHELVES = {
+  BOOKSHELF1: {
+    name: 'プログラミング書籍',
+    description: 'プログラミング関連の技術書',
+    isPublic: true,
+  },
+  BOOKSHELF2: {
+    name: 'お気に入り',
+    description: '個人的なお気に入りの本',
+    isPublic: false,
+  },
+  BOOKSHELF3: {
+    name: 'データベース関連',
+    description: 'データベースに関する書籍',
+    isPublic: true,
+  },
+};
+
+/**
  * テスト用ユーザーデータ
  */
 export const testUsers: Omit<User, 'id' | 'createdAt' | 'updatedAt'>[] = [

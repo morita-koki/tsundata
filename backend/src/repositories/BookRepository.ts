@@ -3,7 +3,7 @@
  * Handles all book-related database operations
  */
 
-import { eq, and, desc, asc, like, count, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, asc, like, count, inArray } from 'drizzle-orm';
 import { books, userBooks } from '../models/index.js';
 import { BaseRepository, type Database } from './BaseRepository.js';
 import type { 
@@ -102,7 +102,7 @@ export class BookRepository extends BaseRepository {
         .select()
         .from(books)
         .where(
-          and(
+          or(
             like(books.title, searchPattern),
             like(books.author, searchPattern),
             like(books.isbn, searchPattern)
@@ -117,7 +117,7 @@ export class BookRepository extends BaseRepository {
         .select({ count: count() })
         .from(books)
         .where(
-          and(
+          or(
             like(books.title, searchPattern),
             like(books.author, searchPattern),
             like(books.isbn, searchPattern)

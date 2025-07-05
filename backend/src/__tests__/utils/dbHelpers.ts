@@ -4,17 +4,23 @@
  */
 
 import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { expect } from '@jest/globals';
 import { testUsers, testBooks, testUserBooks, testBookshelves } from '../fixtures/testData.js';
+import type { Database as DrizzleDatabase } from '../../repositories/BaseRepository.js';
+import * as schema from '../../models/index.js';
 
 /**
  * テスト用データベースクラス
  */
 export class TestDatabase {
-  public db: Database.Database;
+  public sqliteDb: Database.Database;
+  public db: DrizzleDatabase;
   
   constructor() {
     // インメモリSQLiteデータベースを作成
-    this.db = new Database(':memory:');
+    this.sqliteDb = new Database(':memory:');
+    this.db = drizzle(this.sqliteDb, { schema });
     this.initializeSchema();
   }
 
@@ -26,11 +32,11 @@ export class TestDatabase {
       -- ユーザーテーブル
       CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        firebaseUid TEXT UNIQUE NOT NULL,
+        firebase_uid TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
         username TEXT UNIQUE NOT NULL,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       -- 書籍テーブル
@@ -40,83 +46,84 @@ export class TestDatabase {
         title TEXT NOT NULL,
         author TEXT NOT NULL,
         publisher TEXT,
-        publishedDate TEXT,
+        published_date TEXT,
         description TEXT,
-        pageCount INTEGER,
+        page_count INTEGER,
         thumbnail TEXT,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        price REAL,
+        series TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       -- ユーザー書籍テーブル
       CREATE TABLE user_books (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        userId INTEGER NOT NULL,
-        bookId INTEGER NOT NULL,
-        isRead BOOLEAN DEFAULT FALSE,
-        addedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        readAt DATETIME,
-        FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE,
-        FOREIGN KEY (bookId) REFERENCES books (id) ON DELETE CASCADE,
-        UNIQUE(userId, bookId)
+        user_id INTEGER NOT NULL,
+        book_id INTEGER NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        read_at DATETIME,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE,
+        UNIQUE(user_id, book_id)
       );
 
       -- 本棚テーブル
       CREATE TABLE bookshelves (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        userId INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
-        isPublic BOOLEAN DEFAULT FALSE,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE
+        is_public BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       );
 
       -- 本棚書籍テーブル
       CREATE TABLE bookshelf_books (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        bookshelfId INTEGER NOT NULL,
-        userBookId INTEGER NOT NULL,
-        displayOrder INTEGER DEFAULT 0,
-        addedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (bookshelfId) REFERENCES bookshelves (id) ON DELETE CASCADE,
-        FOREIGN KEY (userBookId) REFERENCES user_books (id) ON DELETE CASCADE,
-        UNIQUE(bookshelfId, userBookId)
+        bookshelf_id INTEGER NOT NULL,
+        user_book_id INTEGER NOT NULL,
+        display_order INTEGER DEFAULT 0,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (bookshelf_id) REFERENCES bookshelves (id) ON DELETE CASCADE,
+        FOREIGN KEY (user_book_id) REFERENCES user_books (id) ON DELETE CASCADE,
+        UNIQUE(bookshelf_id, user_book_id)
       );
 
       -- フォローテーブル
       CREATE TABLE follows (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        followerId INTEGER NOT NULL,
-        followeeId INTEGER NOT NULL,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (followerId) REFERENCES users (id) ON DELETE CASCADE,
-        FOREIGN KEY (followeeId) REFERENCES users (id) ON DELETE CASCADE,
-        UNIQUE(followerId, followeeId)
+        follower_id INTEGER NOT NULL,
+        following_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (following_id) REFERENCES users (id) ON DELETE CASCADE,
+        UNIQUE(follower_id, following_id)
       );
 
       -- ブロックテーブル
       CREATE TABLE blocks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        blockerId INTEGER NOT NULL,
-        blockedId INTEGER NOT NULL,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (blockerId) REFERENCES users (id) ON DELETE CASCADE,
-        FOREIGN KEY (blockedId) REFERENCES users (id) ON DELETE CASCADE,
-        UNIQUE(blockerId, blockedId)
+        blocker_id INTEGER NOT NULL,
+        blocked_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (blocker_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (blocked_id) REFERENCES users (id) ON DELETE CASCADE,
+        UNIQUE(blocker_id, blocked_id)
       );
 
       -- インデックス作成
-      CREATE INDEX idx_users_firebase_uid ON users(firebaseUid);
+      CREATE INDEX idx_users_firebase_uid ON users(firebase_uid);
       CREATE INDEX idx_users_email ON users(email);
       CREATE INDEX idx_books_isbn ON books(isbn);
-      CREATE INDEX idx_user_books_user_id ON user_books(userId);
-      CREATE INDEX idx_user_books_book_id ON user_books(bookId);
-      CREATE INDEX idx_bookshelves_user_id ON bookshelves(userId);
-      CREATE INDEX idx_bookshelf_books_bookshelf_id ON bookshelf_books(bookshelfId);
+      CREATE INDEX idx_user_books_user_id ON user_books(user_id);
+      CREATE INDEX idx_user_books_book_id ON user_books(book_id);
+      CREATE INDEX idx_bookshelves_user_id ON bookshelves(user_id);
+      CREATE INDEX idx_bookshelf_books_bookshelf_id ON bookshelf_books(bookshelf_id);
     `;
 
-    this.db.exec(schema);
+    this.sqliteDb.exec(schema);
     console.log('📊 テスト用データベーススキーマ初期化完了');
   }
 
@@ -135,12 +142,12 @@ export class TestDatabase {
     ];
 
     for (const table of tables) {
-      this.db.prepare(`DELETE FROM ${table}`).run();
+      this.sqliteDb.prepare(`DELETE FROM ${table}`).run();
     }
 
     // Auto incrementをリセット
     for (const table of tables) {
-      this.db.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(table);
+      this.sqliteDb.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(table);
     }
 
     console.log('🗑️ 全テーブルデータクリア完了');
@@ -150,8 +157,8 @@ export class TestDatabase {
    * テストユーザーの挿入
    */
   insertTestUsers() {
-    const stmt = this.db.prepare(`
-      INSERT INTO users (firebaseUid, email, username)
+    const stmt = this.sqliteDb.prepare(`
+      INSERT INTO users (firebase_uid, email, username)
       VALUES (?, ?, ?)
     `);
 
@@ -172,8 +179,8 @@ export class TestDatabase {
    * テスト書籍の挿入
    */
   insertTestBooks() {
-    const stmt = this.db.prepare(`
-      INSERT INTO books (isbn, title, author, publisher, publishedDate, description, pageCount, thumbnail)
+    const stmt = this.sqliteDb.prepare(`
+      INSERT INTO books (isbn, title, author, publisher, published_date, description, page_count, thumbnail)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -203,8 +210,8 @@ export class TestDatabase {
    * テストユーザー書籍の挿入
    */
   insertTestUserBooks() {
-    const stmt = this.db.prepare(`
-      INSERT INTO user_books (userId, bookId, isRead)
+    const stmt = this.sqliteDb.prepare(`
+      INSERT INTO user_books (user_id, book_id, is_read)
       VALUES (?, ?, ?)
     `);
 
@@ -225,8 +232,8 @@ export class TestDatabase {
    * テスト本棚の挿入
    */
   insertTestBookshelves() {
-    const stmt = this.db.prepare(`
-      INSERT INTO bookshelves (userId, name, description, isPublic)
+    const stmt = this.sqliteDb.prepare(`
+      INSERT INTO bookshelves (user_id, name, description, is_public)
       VALUES (?, ?, ?, ?)
     `);
 
@@ -273,7 +280,7 @@ export class TestDatabase {
     const counts: Record<string, number> = {};
 
     for (const table of tables) {
-      const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as { count: number };
+      const result = this.sqliteDb.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as { count: number };
       counts[table] = result.count;
     }
 
@@ -284,13 +291,13 @@ export class TestDatabase {
    * 特定ユーザーのデータ取得
    */
   getUserData(userId: number) {
-    const user = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    const books = this.db.prepare(`
+    const user = this.sqliteDb.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    const books = this.sqliteDb.prepare(`
       SELECT ub.*, b.* FROM user_books ub
-      JOIN books b ON ub.bookId = b.id
-      WHERE ub.userId = ?
+      JOIN books b ON ub.book_id = b.id
+      WHERE ub.user_id = ?
     `).all(userId);
-    const bookshelves = this.db.prepare('SELECT * FROM bookshelves WHERE userId = ?').all(userId);
+    const bookshelves = this.sqliteDb.prepare('SELECT * FROM bookshelves WHERE user_id = ?').all(userId);
 
     return { user, books, bookshelves };
   }
@@ -299,15 +306,15 @@ export class TestDatabase {
    * トランザクション実行
    */
   transaction<T>(callback: (db: Database.Database) => T): T {
-    const transaction = this.db.transaction(callback);
-    return transaction(this.db);
+    const transaction = this.sqliteDb.transaction(callback);
+    return transaction(this.sqliteDb);
   }
 
   /**
    * データベースのクローズ
    */
   close() {
-    this.db.close();
+    this.sqliteDb.close();
     console.log('🔒 テスト用データベースクローズ完了');
   }
 }
@@ -345,6 +352,20 @@ export const dbTestUtils = {
 };
 
 /**
+ * 従来の関数ベースAPI（後方互換性）
+ */
+export const createTestDatabase = () => {
+  const testDb = new TestDatabase();
+  return testDb.db; // DrizzleのDatabaseインスタンスを返す
+};
+
+export const closeTestDatabase = (db: DrizzleDatabase) => {
+  // Drizzle の場合、直接的なclose方法はないため、何もしない
+  // 実際のcloseは TestDatabase.close() を通じて行う
+  console.log('🔒 テスト用データベースクローズ完了');
+};
+
+/**
  * データベーステストアサーション
  */
 export const dbAssertions = {
@@ -352,7 +373,7 @@ export const dbAssertions = {
    * テーブルの行数確認
    */
   expectTableCount: (testDb: TestDatabase, table: string, expectedCount: number) => {
-    const result = testDb.db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as { count: number };
+    const result = testDb.sqliteDb.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as { count: number };
     expect(result.count).toBe(expectedCount);
   },
 
@@ -362,7 +383,7 @@ export const dbAssertions = {
   expectRecordExists: (testDb: TestDatabase, table: string, condition: Record<string, any>) => {
     const conditions = Object.keys(condition).map(key => `${key} = ?`).join(' AND ');
     const values = Object.values(condition);
-    const result = testDb.db.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE ${conditions}`).get(...values) as { count: number };
+    const result = testDb.sqliteDb.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE ${conditions}`).get(...values) as { count: number };
     expect(result.count).toBeGreaterThan(0);
   },
 
@@ -372,7 +393,7 @@ export const dbAssertions = {
   expectRecordNotExists: (testDb: TestDatabase, table: string, condition: Record<string, any>) => {
     const conditions = Object.keys(condition).map(key => `${key} = ?`).join(' AND ');
     const values = Object.values(condition);
-    const result = testDb.db.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE ${conditions}`).get(...values) as { count: number };
+    const result = testDb.sqliteDb.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE ${conditions}`).get(...values) as { count: number };
     expect(result.count).toBe(0);
   },
 

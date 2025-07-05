@@ -121,3 +121,8 @@ build/
 # Temporary files
 tmp/
 temp/
+
+
+# mcp
+.mcp.json
+

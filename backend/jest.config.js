@@ -29,6 +29,9 @@ export default {
         allowSyntheticDefaultImports: true,
         esModuleInterop: true
       }
+    }],
+    '^.+\\.js$': ['ts-jest', {
+      useESM: true
     }]
   },
   
@@ -95,8 +98,8 @@ export default {
   // エラー時の詳細表示
   errorOnDeprecated: true,
   
-  // 外部API呼び出しを制限
+  // ESM パッケージの変換を許可
   transformIgnorePatterns: [
-    'node_modules/(?!(axios)/)'
+    'node_modules/(?!(axios|drizzle-orm|better-sqlite3)/)'
   ]
 };

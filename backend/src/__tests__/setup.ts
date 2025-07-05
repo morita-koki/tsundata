@@ -4,6 +4,7 @@
  */
 
 import { beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { resetAllMocks } from './mocks/externalApi.js';
 
 // テスト用のタイムアウト延長
 jest.setTimeout(30000);
@@ -28,17 +29,8 @@ beforeAll(() => {
     }
   }));
 
-  // Firebase Admin SDKのモック設定
-  jest.mock('firebase-admin', () => ({
-    initializeApp: jest.fn(),
-    auth: jest.fn(() => ({
-      verifyIdToken: jest.fn(),
-      getUser: jest.fn(),
-    })),
-    credential: {
-      cert: jest.fn(),
-    },
-  }));
+  // 外部APIモックの設定
+  resetAllMocks();
 
   // console.log, console.error のモック（テスト出力を整理）
   if (process.env.SILENT_TESTS === 'true') {
@@ -49,8 +41,8 @@ beforeAll(() => {
 
 // 各テスト前のクリーンアップ
 beforeEach(() => {
-  // モックのクリア
-  jest.clearAllMocks();
+  // 全モックのリセット
+  resetAllMocks();
   
   // タイマーのクリア
   jest.clearAllTimers();

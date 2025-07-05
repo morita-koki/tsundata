@@ -23,15 +23,60 @@ export const mockAxios = {
 /**
  * Firebase Admin SDK モック
  */
+const mockAuthInstance = {
+  verifyIdToken: jest.fn(),
+  getUser: jest.fn(),
+  getUserByEmail: jest.fn(),
+  createUser: jest.fn(),
+  updateUser: jest.fn(),
+  deleteUser: jest.fn(),
+};
+
 export const mockFirebaseAdmin = {
   initializeApp: jest.fn(),
-  auth: jest.fn(() => ({
-    verifyIdToken: jest.fn(),
-    getUser: jest.fn(),
-  })),
+  auth: jest.fn(() => mockAuthInstance),
   credential: {
     cert: jest.fn(),
   },
+};
+
+// Firebase テストデータ
+export const mockFirebaseUsers = [
+  {
+    uid: 'test-firebase-uid-1',
+    email: 'user1@example.com',
+    displayName: 'Test User 1',
+    emailVerified: true,
+    disabled: false,
+  },
+  {
+    uid: 'test-firebase-uid-2', 
+    email: 'user2@example.com',
+    displayName: 'Test User 2',
+    emailVerified: true,
+    disabled: false,
+  }
+];
+
+export const mockIdTokens = {
+  'valid-token': {
+    uid: 'test-firebase-uid-1',
+    email: 'user1@example.com',
+    email_verified: true,
+    aud: 'test-project-id',
+    iss: 'https://securetoken.google.com/test-project-id',
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 3600
+  },
+  'expired-token': {
+    uid: 'test-firebase-uid-2',
+    email: 'user2@example.com',
+    email_verified: true,
+    aud: 'test-project-id',
+    iss: 'https://securetoken.google.com/test-project-id',
+    iat: Math.floor(Date.now() / 1000) - 7200,
+    exp: Math.floor(Date.now() / 1000) - 3600
+  }
 };
 
 /**
@@ -40,7 +85,21 @@ export const mockFirebaseAdmin = {
 export const mockNdlApiResponses = {
   success: (isbn: string) => ({
     status: 200,
-    data: testResponses.ndlApi.success.replace('9784797382570', isbn)
+    data: `<?xml version="1.0" encoding="UTF-8"?>
+      <searchRetrieveResponse>
+        <numberOfRecords>1</numberOfRecords>
+        <records>
+          <record>
+            <recordData>
+              <dcterms:title>リーダブルコード</dcterms:title>
+              <dc:creator>Dustin Boswell</dc:creator>
+              <dc:publisher>オライリージャパン</dc:publisher>
+              <dcterms:issued>2012-06-23</dcterms:issued>
+              <dc:identifier>${isbn}</dc:identifier>
+            </recordData>
+          </record>
+        </records>
+      </searchRetrieveResponse>`
   }),
   
   notFound: () => ({
@@ -56,7 +115,7 @@ export const mockNdlApiResponses = {
   timeout: () => {
     const error = new Error('timeout of 5000ms exceeded');
     (error as any).code = 'ECONNABORTED';
-    throw error;
+    return Promise.reject(error);
   },
   
   rateLimited: () => ({
@@ -156,29 +215,71 @@ export function setupFirebaseMocks() {
   const mockAuth = mockFirebaseAdmin.auth();
   
   // ID トークン検証のモック
-  (mockAuth.verifyIdToken as jest.MockedFunction<any>).mockImplementation((token: string) => {
-    if (token === 'valid-token') {
-      return Promise.resolve({
-        uid: 'test-firebase-uid-1',
-        email: 'user1@example.com'
-      });
+  mockAuth.verifyIdToken.mockImplementation((token: string) => {
+    if (token === 'invalid-token') {
+      return Promise.reject(new Error('Firebase ID token has invalid signature'));
     } else if (token === 'expired-token') {
       return Promise.reject(new Error('Firebase ID token has expired'));
+    } else if (mockIdTokens[token as keyof typeof mockIdTokens]) {
+      return Promise.resolve(mockIdTokens[token as keyof typeof mockIdTokens]);
     } else {
-      return Promise.reject(new Error('Firebase ID token is invalid'));
+      // デフォルトは有効なトークンとして扱う
+      return Promise.resolve(mockIdTokens['valid-token']);
     }
   });
   
   // ユーザー情報取得のモック
-  (mockAuth.getUser as jest.MockedFunction<any>).mockImplementation((uid: string) => {
-    if (uid === 'test-firebase-uid-1') {
-      return Promise.resolve({
-        uid: 'test-firebase-uid-1',
-        email: 'user1@example.com',
-        displayName: 'Test User 1'
-      });
+  mockAuth.getUser.mockImplementation((uid: string) => {
+    const user = mockFirebaseUsers.find(u => u.uid === uid);
+    if (user) {
+      return Promise.resolve(user);
     } else {
-      return Promise.reject(new Error('User not found'));
+      return Promise.reject(new Error(`There is no user record corresponding to the provided identifier: ${uid}`));
+    }
+  });
+  
+  // ユーザー情報をメールで取得するモック
+  mockAuth.getUserByEmail.mockImplementation((email: string) => {
+    const user = mockFirebaseUsers.find(u => u.email === email);
+    if (user) {
+      return Promise.resolve(user);
+    } else {
+      return Promise.reject(new Error(`There is no user record corresponding to the provided email: ${email}`));
+    }
+  });
+  
+  // ユーザー作成のモック
+  mockAuth.createUser.mockImplementation((userRecord: any) => {
+    const newUser = {
+      uid: `mock-uid-${Date.now()}`,
+      email: userRecord.email,
+      displayName: userRecord.displayName,
+      emailVerified: false,
+      disabled: false,
+    };
+    mockFirebaseUsers.push(newUser);
+    return Promise.resolve(newUser);
+  });
+  
+  // ユーザー更新のモック
+  mockAuth.updateUser.mockImplementation((uid: string, userRecord: any) => {
+    const userIndex = mockFirebaseUsers.findIndex(u => u.uid === uid);
+    if (userIndex !== -1) {
+      mockFirebaseUsers[userIndex] = { ...mockFirebaseUsers[userIndex], ...userRecord };
+      return Promise.resolve(mockFirebaseUsers[userIndex]);
+    } else {
+      return Promise.reject(new Error(`There is no user record corresponding to the provided identifier: ${uid}`));
+    }
+  });
+  
+  // ユーザー削除のモック
+  mockAuth.deleteUser.mockImplementation((uid: string) => {
+    const userIndex = mockFirebaseUsers.findIndex(u => u.uid === uid);
+    if (userIndex !== -1) {
+      mockFirebaseUsers.splice(userIndex, 1);
+      return Promise.resolve(undefined);
+    } else {
+      return Promise.reject(new Error(`There is no user record corresponding to the provided identifier: ${uid}`));
     }
   });
 }
@@ -222,7 +323,7 @@ export const mockScenarios = {
   // ネットワークタイムアウトシナリオ
   networkTimeout: () => {
     mockAxios.get.mockImplementation(() => {
-      return Promise.reject(mockNdlApiResponses.timeout());
+      return mockNdlApiResponses.timeout();
     });
   }
 };
